@@ -32,9 +32,33 @@
   label { font-size: 15px; white-space: nowrap; }
   #status { margin-top: 8px; min-height: 1.4em; font-size: 14px; color: #9c9; }
   #status.err { color: #f88; }
+  /* モード切り替え（入力 ⇔ autotube）。画面全体を切り替える */
+  .modebar { position: sticky; top: 0; z-index: 10; display: flex; gap: 8px;
+             margin: -12px -12px 10px; padding: 8px 12px; background: #111; border-bottom: 1px solid #333; }
+  .modebar button { padding: 9px 4px; font-size: 15px; }
+  .modebar button.on { background: #2a5bd7; font-weight: bold; }
+  #atView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
+  #atView iframe { width: 100%; height: 100%; border: 0; background: #111; }
+  body.at #inputView { display: none; }
+  .modebar #qrBtn { flex: 0 0 auto; padding: 9px 12px; }
+  #qr { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.85);
+        align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 16px; }
+  #qr.on { display: flex; }
+  #qrImg { background: #fff; padding: 12px; border-radius: 10px; line-height: 0; }
+  #qrImg img { width: min(70vw, 320px); height: auto; image-rendering: pixelated; }
+  #qrUrl { font-size: 13px; color: #ccc; word-break: break-all; text-align: center; max-width: 360px; }
+  body.at #atView { display: block; }
 </style>
 </head>
 <body>
+<div class="modebar" id="modebar">
+  <button data-mode="input">⌨ 入力</button>
+  <button data-mode="at">▶ autotube</button>
+  <button id="qrBtn" title="スマホで開くための QR コード">QR</button>
+</div>
+<div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
+<div id="atView"><iframe id="atFrame" title="autotube"></iframe></div>
+<div id="inputView">
 <textarea id="text" placeholder="ここに音声入力して「送信」"></textarea>
 <div class="row">
   <button id="send">送信</button>
@@ -96,6 +120,7 @@
   <button data-text="n">n<small>次</small></button>
   <button data-text="N">N<small>前</small></button>
 </div>
+</div><!-- /inputView -->
 <script>
   const token = new URLSearchParams(location.search).get("t") || "";
   const $ = (id) => document.getElementById(id);
@@ -103,6 +128,41 @@
   try { $("auto").checked = localStorage.getItem("auto") !== "0"; } catch (e) { $("auto").checked = true; }
   $("auto").onchange = () => { try { localStorage.setItem("auto", $("auto").checked ? "1" : "0"); } catch (e) {} };
   $("enter").onchange = () => { try { localStorage.setItem("enter", $("enter").checked ? "1" : "0"); } catch (e) {} };
+
+  // モード切り替え：autotube（web.py、既定ポート 8766）の画面を iframe で全体に出す。合言葉は共通
+  const AUTOTUBE_PORT = 8766;
+  function setMode(mode) {
+    document.body.classList.toggle("at", mode === "at");
+    document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+    if (mode === "at") {
+      $("atView").style.top = $("modebar").offsetHeight + "px";
+      if (!$("atFrame").src) {
+        $("atFrame").src = `${location.protocol}//${location.hostname}:${AUTOTUBE_PORT}/?t=${encodeURIComponent(token)}`;
+      }
+    }
+    try { localStorage.setItem("mode", mode); } catch (e) {}
+  }
+  document.querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
+  let savedMode = "input";
+  try { savedMode = localStorage.getItem("mode") || "input"; } catch (e) {}
+  setMode(savedMode);
+
+  // QR コード：スマホで開く URL（LAN 側 IP ＋合言葉）を表示する。ライブラリは押したときに読み込む
+  function loadScript(src) {
+    return new Promise((ok, ng) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = ng; document.head.appendChild(s); });
+  }
+  $("qrBtn").onclick = async () => {
+    try {
+      const r = await fetch("/info", { headers: { "X-Token": token } });
+      const { url } = await r.json();
+      if (!window.qrcode) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js");
+      const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+      $("qrImg").innerHTML = qr.createImgTag(8, 0);
+      $("qrUrl").textContent = url;
+      $("qr").classList.add("on");
+    } catch (e) { alert("QR コードを作れませんでした: " + e.message); }
+  };
+  $("qr").onclick = () => $("qr").classList.remove("on");
 
   function status(msg, err) { $("status").textContent = msg; $("status").className = err ? "err" : ""; }
 
