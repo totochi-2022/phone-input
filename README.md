@@ -18,8 +18,12 @@
 ```sh
 python3 ~/phone-input/server.py
 ```
-起動すると `http://192.168.0.200:8765/?t=<合言葉>` のような URL を表示する（`192.168.0.200` は作者の環境の IP。
-自分の PC の IP に読み替える。`server.py` の最後の行で表示を変えられる）。スマホでその URL を開く。
+起動すると `http://<この PC の LAN 側 IP>:8765/?t=<合言葉>` を表示する。スマホでその URL を開く。
+PC のブラウザで開いて上部の「QR」を押すと、同じ URL を QR コードで表示する（スマホのカメラで読み取れる）。
+
+- 上部の「⌨ 入力 / ▶ autotube」で画面を切り替える。autotube は [auto-selection](https://github.com/totochi-2022/auto-selection) の Web リモコン（`web.py`、ポート 8766）で、合言葉は共通
+- **WSL（Windows）でも動く**：WSL で起動すると、Windows 側で今フォーカスしているウィンドウに送る（`win_input.ps1` を PowerShell で常駐させ、SendInput で入力）。
+  スマホから繋ぐには、`.wslconfig` に `networkingMode=mirrored` を書き、Windows のファイアウォール（Hyper-V ファイアウォールと通常のもの）で 8765・8766 番を開ける。管理者権限のウィンドウには入力できない
 
 - 合言葉は初回起動時に `token` ファイルとして自動生成される（git 管理外）
 - SSH や tmux から起動しても画面に届くよう、`WAYLAND_DISPLAY`（既定 `wayland-0`）と `XDG_RUNTIME_DIR` を補っている
