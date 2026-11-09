@@ -92,7 +92,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/type":
                 text = str(data.get("text", ""))
                 if text:
-                    wtype(["--", text])
+                    # 打ち始めに少し待つ。wtype は毎回仮想キーボードを作り直すので、
+                    # すぐ打つと受け側の準備が間に合わず 1 文字目が落ちることがある
+                    wtype(["-s", "80", "--", text])
                 if data.get("enter"):
                     wtype(KEYS["Enter"])
             elif path == "/mouse":
