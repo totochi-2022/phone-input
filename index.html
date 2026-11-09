@@ -29,6 +29,9 @@
            box-sizing: border-box; font-size: 20px; color: #998; user-select: none; text-align: center; }
   #wheel span:nth-child(2) { font-size: 10px; line-height: 1.3; }
   #wheel.on { background: #3a2f4d; }
+  .mbtn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .mbtn.held { background: #2a5bd7; }
+  #dclick { flex: 0.6; }
   label { font-size: 15px; white-space: nowrap; }
   #status { margin-top: 8px; min-height: 1.4em; font-size: 14px; color: #9c9; }
   #status.err { color: #f88; }
@@ -86,14 +89,15 @@
   <button data-key="PageUp">PgUp</button>
   <button data-key="PageDown">PgDn</button>
 </div>
-<h2>タッチパッド（なぞる＝移動、タップ＝クリック、右の帯＝押している間スクロール）</h2>
+<h2>タッチパッド（なぞる＝移動、タップ＝クリック、右の帯＝押している間スクロール。左クリックを押さえたままなぞる＝ドラッグ）</h2>
 <div class="padwrap">
   <div id="pad"></div>
   <div id="wheel"><span>▲</span><span>押している間<br>スクロール</span><span>▼</span></div>
 </div>
 <div class="row">
-  <button id="lclick">左クリック</button>
-  <button id="rclick">右クリック</button>
+  <button id="lclick" class="mbtn">左クリック</button>
+  <button id="dclick">ダブル</button>
+  <button id="rclick" class="mbtn">右クリック</button>
 </div>
 <h2>Vimium</h2>
 <div class="grid vim">
@@ -225,23 +229,26 @@
     else if ((e.key === "Backspace" || e.keyCode === 8) && direct.value === "") { e.preventDefault(); sendKey("BackSpace"); }
   });
 
-  // タッチパッド：動きをためて 40ms ごとにまとめて送る（送信中は次を待つ）
+  // タッチパッド：動きとボタン操作をためて 40ms ごとにまとめて送る（送信中は次を待つ）。
+  // 移動とボタンを同じ道で送るので順番が入れ替わらない（サーバーは移動 → ボタンの順に実行）
   const SPEED = 2.4, SCROLL_MAX = 6;  // SCROLL_MAX = 40ms ごとの最大スクロール量
-  let acc = { x: 0, y: 0, s: 0 }, busy = false;
+  let acc = { x: 0, y: 0, s: 0 }, ops = [], busy = false;
   async function flush() {
     if (busy) return;
     const mx = Math.trunc(acc.x), my = Math.trunc(acc.y), sc = Math.trunc(acc.s);
-    if (!mx && !my && !sc) return;
+    if (!mx && !my && !sc && !ops.length) return;
     acc.x -= mx; acc.y -= my; acc.s -= sc;
     const body = {};
     if (mx || my) body.move = [mx, my];
     if (sc) body.scroll = sc;
+    if (ops.length) { body.ops = ops; ops = []; }
     busy = true;
     try { await post("/mouse", body); } catch (e) { status("失敗: " + e.message, true); }
     busy = false;
   }
   setInterval(flush, 40);
-  const click = (button) => enqueue(() => post("/mouse", { click: button }));
+  const mouseOp = (op, button) => { ops.push({ op, button }); flush(); };
+  const click = (button) => mouseOp("click", button);
 
   function track(el, onMove, onTap) {
     let last = null, start = null, moved = 0;
@@ -284,8 +291,34 @@
   wheel.addEventListener("pointermove", (e) => { if (wheelTimer) setRate(e); });
   wheel.addEventListener("pointerup", wheelStop);
   wheel.addEventListener("pointercancel", wheelStop);
-  $("lclick").onclick = () => click("left");
-  $("rclick").onclick = () => click("right");
+  // 左・右クリックボタンは本物のボタンと同じ：指を置いたら押す、離したら離す。
+  // 押さえたまま別の指でパッドをなぞるとドラッグになる。押している間は 1 秒ごとに ping を送る
+  // （指を離した通知が届かなくても、サーバーが 4 秒で自動的に離す）
+  const held = new Set();
+  let pingTimer = null;
+  function holdButton(el, button) {
+    let pid = null;
+    const release = () => {
+      if (pid === null) return;
+      pid = null; el.classList.remove("held"); held.delete(button); mouseOp("up", button);
+      if (!held.size) { clearInterval(pingTimer); pingTimer = null; }
+    };
+    el.addEventListener("pointerdown", (e) => {
+      if (pid !== null) return;
+      e.preventDefault(); el.setPointerCapture(e.pointerId);
+      pid = e.pointerId; el.classList.add("held"); held.add(button); mouseOp("down", button);
+      if (!pingTimer) pingTimer = setInterval(() => mouseOp("ping", "left"), 1000);
+    });
+    el.addEventListener("pointerup", (e) => { if (e.pointerId === pid) release(); });
+    el.addEventListener("pointercancel", (e) => { if (e.pointerId === pid) release(); });
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+    return release;
+  }
+  const releases = [holdButton($("lclick"), "left"), holdButton($("rclick"), "right")];
+  // 画面を切り替えたり閉じたりしたら、押したままにしない
+  document.addEventListener("visibilitychange", () => { if (document.hidden) releases.forEach((r) => r()); });
+  window.addEventListener("pagehide", () => releases.forEach((r) => r()));
+  $("dclick").onclick = () => mouseOp("dbl", "left");
 
   document.querySelectorAll("[data-text]").forEach((b) => {
     b.onclick = async () => {

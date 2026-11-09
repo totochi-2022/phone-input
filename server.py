@@ -11,8 +11,10 @@ import json
 import os
 import secrets
 import socket
+import struct
 import subprocess
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -120,22 +122,142 @@ def press(key):
     wtype(KEYS[key])
 
 
+class UInputMouse:
+    """/dev/uinput で仮想マウスを 1 つ作る（標準ライブラリだけ）。
+    wlrctl と違ってボタンを「押す」「離す」を別々に送れるのでドラッグができる。
+    /dev/uinput に書き込めないとき（udev ルール未設定）は作らず、wlrctl に戻る。
+    labwc の rc.xml で、この名前のデバイスは加速なし（flat）にして wlrctl と同じ 1:1 の動きにしている"""
+
+    NAME = b"phone-input virtual mouse"
+    EV_SYN, EV_KEY, EV_REL = 0, 1, 2
+    REL_X, REL_Y, REL_WHEEL, REL_WHEEL_HI_RES = 0x00, 0x01, 0x08, 0x0B
+    BTN = {"left": 0x110, "right": 0x111, "middle": 0x112}
+
+    def __init__(self):
+        import fcntl
+        self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+        UI_SET_EVBIT, UI_SET_KEYBIT, UI_SET_RELBIT, UI_DEV_CREATE = 0x40045564, 0x40045565, 0x40045566, 0x5501
+        for ev in (self.EV_KEY, self.EV_REL):
+            fcntl.ioctl(self.fd, UI_SET_EVBIT, ev)
+        for code in self.BTN.values():
+            fcntl.ioctl(self.fd, UI_SET_KEYBIT, code)
+        for code in (self.REL_X, self.REL_Y, self.REL_WHEEL, self.REL_WHEEL_HI_RES):
+            fcntl.ioctl(self.fd, UI_SET_RELBIT, code)
+        # struct uinput_user_dev: name[80], input_id(bustype=USB, vendor, product, version), ff_effects_max, abs*[64]x4
+        dev = struct.pack("80sHHHHi", self.NAME, 0x03, 0x1209, 0x7069, 1, 0) + bytes(4 * 64 * 4)
+        os.write(self.fd, dev)
+        fcntl.ioctl(self.fd, UI_DEV_CREATE)
+        self.lock = threading.Lock()
+        self.held = set()
+        self.wheel_rest = 0  # 1 ノッチ（120）未満の端数
+
+    def _emit(self, events):
+        now = time.time()
+        sec, usec = int(now), int((now % 1) * 1e6)
+        data = b"".join(struct.pack("llHHi", sec, usec, t, c, v) for t, c, v in events)
+        data += struct.pack("llHHi", sec, usec, self.EV_SYN, 0, 0)
+        with self.lock:
+            os.write(self.fd, data)
+
+    def move(self, dx, dy):
+        self._emit([(self.EV_REL, self.REL_X, dx), (self.EV_REL, self.REL_Y, dy)])
+
+    def scroll(self, n):
+        # wlrctl の scroll と同じ量にそろえる（wlrctl は 15 で 1 ノッチ、uinput の高分解能は 120 で 1 ノッチ）。
+        # wlrctl は正の値で下へ、ホイールは正の値で上へなので向きを反転
+        hi = -n * 8
+        self.wheel_rest += hi
+        notches = int(self.wheel_rest / 120)
+        self.wheel_rest -= notches * 120
+        ev = [(self.EV_REL, self.REL_WHEEL_HI_RES, hi)]
+        if notches:
+            ev.append((self.EV_REL, self.REL_WHEEL, notches))
+        self._emit(ev)
+
+    def button(self, name, down):
+        self._emit([(self.EV_KEY, self.BTN[name], 1 if down else 0)])
+        (self.held.add if down else self.held.discard)(name)
+
+    def click(self, name):
+        self.button(name, True)
+        time.sleep(0.02)
+        self.button(name, False)
+
+    def release_all(self):
+        for name in list(self.held):
+            self.button(name, False)
+
+
+def make_uinput():
+    if IS_WSL:
+        return None
+    try:
+        return UInputMouse()
+    except OSError:
+        return None  # /dev/uinput に権限がない → wlrctl（ドラッグなし）
+
+
+umouse = make_uinput()
+last_mouse = time.time()  # 最後に /mouse を受けた時刻。押しっぱなしの安全装置用
+
+
+def watchdog():
+    """ボタンを押したまま 4 秒スマホから何も来なければ離す（指を離した通知が届かなかったとき用。
+    押している間、スマホは 1 秒ごとに ping を送ってくる）"""
+    while True:
+        time.sleep(1)
+        if umouse and umouse.held and time.time() - last_mouse > 4:
+            umouse.release_all()
+
+
 def mouse_move(dx, dy):
     if win:
         return win.send(f"move {dx} {dy}")
+    if umouse:
+        return umouse.move(dx, dy)
     wlrctl(["pointer", "move", str(dx), str(dy)])
 
 
 def mouse_scroll(n):
     if win:
         return win.send(f"scroll {n}")
+    if umouse:
+        return umouse.scroll(n)
     wlrctl(["pointer", "scroll", str(n), "0"])
 
 
 def mouse_click(button):
     if win:
         return win.send(f"click {button}")
+    if umouse:
+        return umouse.click(button)
     wlrctl(["pointer", "click", button])
+
+
+def mouse_button(button, down):
+    """押す／離すを別々に送る。uinput がないときは「離す」でクリックだけする（ドラッグはできない）"""
+    if umouse:
+        return umouse.button(button, down)
+    if not down:
+        mouse_click(button)
+
+
+def mouse_op(op):
+    b = op.get("button", "left")
+    if b not in ("left", "right", "middle"):
+        raise ValueError("unknown button")
+    kind = op.get("op")
+    if kind == "down":
+        mouse_button(b, True)
+    elif kind == "up":
+        mouse_button(b, False)
+    elif kind == "click":
+        mouse_click(b)
+    elif kind == "dbl":  # ダブルクリック：サーバー側で間隔をそろえて 2 回
+        mouse_click(b)
+        time.sleep(0.06)
+        mouse_click(b)
+    # "ping" は何もしない（last_mouse の更新だけ）
 
 
 def lan_url():
@@ -199,6 +321,8 @@ class Handler(BaseHTTPRequestHandler):
                 if data.get("enter"):
                     press("Enter")
             elif path == "/mouse":
+                global last_mouse
+                last_mouse = time.time()
                 if "move" in data:
                     dx, dy = (int(v) for v in data["move"])
                     mouse_move(dx, dy)
@@ -206,6 +330,8 @@ class Handler(BaseHTTPRequestHandler):
                     mouse_scroll(int(data["scroll"]))
                 if data.get("click") in ("left", "right", "middle"):
                     mouse_click(data["click"])
+                for op in data.get("ops", []):  # 押す・離す・ダブルクリックなど。移動のあとに順に実行
+                    mouse_op(op)
             elif path == "/key":
                 key = data.get("key")
                 if key not in KEYS:
@@ -223,4 +349,6 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(lan_url())
+    print("マウス:", "uinput（ドラッグ可）" if umouse else ("Windows" if win else "wlrctl（ドラッグ不可）"))
+    threading.Thread(target=watchdog, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
