@@ -218,6 +218,21 @@ class UInputKeyboard:
         os.write(self.fd, dev)
         fcntl.ioctl(self.fd, 0x5501)  # UI_DEV_CREATE
         self.lock = threading.Lock()
+        self.held = set()  # 押したままの修飾キー
+
+    def hold(self, code, down):
+        """修飾キーを押したまま／離す（Ctrl+スクロールなど、マウス操作と組み合わせるため）"""
+        with self.lock:
+            if down and code not in self.held:
+                self._key(code, 1)
+                self.held.add(code)
+            elif not down and code in self.held:
+                self._key(code, 0)
+                self.held.discard(code)
+
+    def release_all(self):
+        for code in list(self.held):
+            self.hold(code, False)
 
     def _key(self, code, value):
         now = time.time()
@@ -249,6 +264,7 @@ def make_ukbd():
 
 
 ukbd = make_ukbd()
+last_kbd = 0.0
 last_mouse = time.time()  # 最後に /mouse を受けた時刻。押しっぱなしの安全装置用
 
 
@@ -259,6 +275,8 @@ def watchdog():
         time.sleep(1)
         if umouse and umouse.held and time.time() - last_mouse > 4:
             umouse.release_all()
+        if ukbd and ukbd.held and time.time() - last_kbd > 4:
+            ukbd.release_all()
 
 
 def mouse_move(dx, dy):
@@ -386,8 +404,18 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/kbd":
                 if not ukbd:
                     return self._reply(500, "仮想キーボードが使えません（/dev/uinput の権限）".encode())
+                global last_kbd
+                last_kbd = time.time()
+                op = data.get("op", "press")
+                if op == "ping":  # 修飾キーを押したままの間、1 秒ごとに来る
+                    return self._reply(200, b"ok")
                 code = int(data.get("code", 0))
                 mods = [int(m) for m in data.get("mods", [])]
+                if op in ("down", "up"):
+                    if code not in UInputKeyboard.CODES:
+                        return self._reply(400, b"unknown key")
+                    ukbd.hold(code, op == "down")
+                    return self._reply(200, b"ok")
                 if not all(c in UInputKeyboard.CODES for c in [code, *mods]):
                     return self._reply(400, b"unknown key")
                 ukbd.press(code, mods)

@@ -33,7 +33,10 @@
   .mbtn.held { background: #2a5bd7; }
   #dclick { flex: 0.6; }
   label { font-size: 15px; white-space: nowrap; }
-  #status { margin-top: 8px; min-height: 1.4em; font-size: 14px; color: #9c9; }
+  /* 送信結果は場所を取らないよう画面の上に浮かせて、少したったら消す */
+  #status { position: fixed; top: 52px; right: 8px; z-index: 15; max-width: 70vw; font-size: 13px; color: #9c9;
+            background: rgba(20,20,20,.9); border: 1px solid #333; border-radius: 6px; padding: 4px 8px; pointer-events: none; }
+  #status:empty { display: none; }
   #status.err { color: #f88; }
   /* モード切り替え（入力 ⇔ autotube）。画面全体を切り替える */
   .modebar { position: sticky; top: 0; z-index: 10; display: flex; gap: 8px;
@@ -53,7 +56,9 @@
   body.at #atView { display: block; }
   /* 入力の 3 モード（タッチパッドのすぐ上で切り替え） */
   .line { display: flex; gap: 6px; }
-  #text { flex: 1; min-width: 0; font-size: 18px; padding: 10px; box-sizing: border-box;
+  .line { align-items: flex-end; }
+  #text { flex: 1; min-width: 0; font-size: 18px; padding: 10px; box-sizing: border-box; height: auto;
+          resize: none; line-height: 1.3; max-height: calc(4 * 1.3em + 20px); overflow-y: auto;
           background: #222; color: #eee; border: 1px solid #444; border-radius: 8px; }
   .line #send { flex: 0 0 auto; padding: 10px 16px; }
   #direct { margin-top: 0 !important; }
@@ -63,8 +68,8 @@
   .ktabs button.on { background: #2a5bd7; font-weight: bold; }
   .kpanel { display: none; }
   body.k-ja #pJa, body.k-en #pEn { display: block; }
-  .padwrap { height: 28vh; }
-  body.k-none .padwrap { height: 38vh; }
+  .padwrap { height: 25.2vh; }
+  body.k-none .padwrap { height: 34.2vh; }
   .pckb { margin-top: 10px !important; }
   /* PC キーボード */
   .pckb { display: grid; gap: 3px; margin: 0 -9px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
@@ -90,7 +95,7 @@
 <div id="inputView">
 <div class="kpanel" id="pJa">
 <div class="line">
-  <input id="text" type="text" lang="ja" enterkeyhint="send" autocomplete="off" placeholder="音声入力して「送信」">
+  <textarea id="text" rows="1" lang="ja" enterkeyhint="send" autocomplete="off" placeholder="音声入力して「送信」"></textarea>
   <button id="send">送信</button>
 </div>
 </div>
@@ -208,7 +213,12 @@
   if (!["ja", "en", "none"].includes(savedK)) savedK = "ja";
   setKmode(savedK);
 
-  function status(msg, err) { $("status").textContent = msg; $("status").className = err ? "err" : ""; }
+  let statusTimer = null;
+  function status(msg, err) {
+    $("status").textContent = msg; $("status").className = err ? "err" : "";
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => { $("status").textContent = ""; }, err ? 5000 : 1500);
+  }
 
   async function post(path, body) {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
@@ -221,12 +231,12 @@
     clearTimeout(autoTimer); bulk = false;
     const text = $("text").value;
     if (!text && !$("enter").checked) return;
-    $("text").value = "";
+    $("text").value = ""; fitText();
     try {
       await post("/type", { text, enter: $("enter").checked });
       status("送信しました");
     } catch (e) {
-      if (!$("text").value) $("text").value = text;  // 失敗したら書いた文を戻す
+      if (!$("text").value) { $("text").value = text; fitText(); }  // 失敗したら書いた文を戻す
       status("失敗: " + e.message, true);
     }
   };
@@ -236,6 +246,9 @@
   $("text").addEventListener("keydown", (e) => {
     if ((e.key === "Enter" || e.keyCode === 13) && !e.isComposing && !taComposing) { e.preventDefault(); $("send").click(); }
   });
+  // 文字が増えたら下に広がる（最大 4 行）。送信して空になれば 1 行に戻る
+  function fitText() { const t = $("text"); t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; }
+  $("text").addEventListener("input", fitText);
   $("text").addEventListener("compositionstart", () => { taComposing = true; });
   $("text").addEventListener("compositionend", () => { taComposing = false; });
   $("text").addEventListener("input", (e) => {
@@ -284,10 +297,12 @@
     const body = {};
     if (mx || my) body.move = [mx, my];
     if (sc) body.scroll = sc;
+    const clicked = ops.some((o) => ["click", "dbl", "up"].includes(o.op));
     if (ops.length) { body.ops = ops; ops = []; }
     busy = true;
     try { await post("/mouse", body); } catch (e) { status("失敗: " + e.message, true); }
     busy = false;
+    if (clicked && typeof pcConsume === "function") pcConsume();  // Ctrl+クリックのあと 1 回だけの Ctrl を離す
   }
   setInterval(flush, 40);
   const mouseOp = (op, button) => { ops.push({ op, button }); flush(); };
@@ -359,8 +374,8 @@
   }
   const releases = [holdButton($("lclick"), "left"), holdButton($("rclick"), "right")];
   // 画面を切り替えたり閉じたりしたら、押したままにしない
-  document.addEventListener("visibilitychange", () => { if (document.hidden) releases.forEach((r) => r()); });
-  window.addEventListener("pagehide", () => releases.forEach((r) => r()));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { releases.forEach((r) => r()); pcReleaseAll(); } });
+  window.addEventListener("pagehide", () => { releases.forEach((r) => r()); pcReleaseAll(); });
   $("dclick").onclick = () => mouseOp("dbl", "left");
 
   // PC キーボード：[表示, Shift 時の表示, Linux のキーコード, 幅, 種類]。指を置いた瞬間に送る
@@ -413,15 +428,43 @@
     if (PC_MODS.has(code)) {
       const now = Date.now(), dbl = pcLastTap.code === code && now - pcLastTap.t < 350;
       pcLastTap = { code, t: now };
+      const was = !!pcMod[code];
       if (dbl) pcMod[code] = "lock"; else if (pcMod[code]) delete pcMod[code]; else pcMod[code] = "on";
+      // 修飾キーはテレビ側でも本当に押したままにする（Ctrl+スクロール・Ctrl+クリックのため）
+      if (!was && pcMod[code]) pcHold(code, true);
+      if (was && !pcMod[code]) pcHold(code, false);
       pcRender();
       return;
     }
-    const mods = Object.keys(pcMod).map(Number);
-    for (const c of mods) if (pcMod[c] === "on") delete pcMod[c];  // 1 回だけの修飾キーは使ったら外す
-    pcRender();
-    enqueue(() => post("/kbd", { code, mods }));  // 順番どおりに送る
+    enqueue(() => post("/kbd", { code, mods: [] }));  // 修飾キーはもう押してあるので、そのキーだけ送る
+    pcConsume();
   });
+  function pcHold(code, down) {
+    enqueue(() => post("/kbd", { op: down ? "down" : "up", code }));
+    pcPing();
+  }
+  // 1 回だけ（青）の修飾キーを離す。キーを打ったあとやクリックのあとに呼ぶ（スクロールでは離さない）
+  function pcConsume() {
+    let any = false;
+    for (const c of Object.keys(pcMod).map(Number)) {
+      if (pcMod[c] === "on") { delete pcMod[c]; pcHold(c, false); any = true; }
+    }
+    if (any) pcRender();
+  }
+  function pcReleaseAll() {
+    const codes = Object.keys(pcMod).map(Number);
+    for (const c of codes) delete pcMod[c];
+    for (const c of codes) fetch("/kbd", { method: "POST", keepalive: true,
+      headers: { "Content-Type": "application/json", "X-Token": token }, body: JSON.stringify({ op: "up", code: c }) });
+    pcRender(); pcPing();
+  }
+  // 押したままの間は 1 秒ごとに合図を送る（来なくなったらサーバーが 4 秒で離す）
+  let pcPingTimer = null;
+  function pcPing() {
+    const any = Object.keys(pcMod).length > 0;
+    if (any && !pcPingTimer) pcPingTimer = setInterval(() => post("/kbd", { op: "ping" }).catch(() => {}), 1000);
+    if (!any && pcPingTimer) { clearInterval(pcPingTimer); pcPingTimer = null; }
+  }
   $("pckb").addEventListener("contextmenu", (e) => e.preventDefault());
 
   document.querySelectorAll("[data-text]").forEach((b) => {
