@@ -83,7 +83,7 @@
 <div id="atView"><iframe id="atFrame" title="autotube"></iframe></div>
 <div id="inputView">
 <div class="kpanel" id="pJa">
-<textarea id="text" placeholder="ここに音声入力して「送信」"></textarea>
+<textarea id="text" lang="ja" inputmode="text" placeholder="ここに音声入力して「送信」"></textarea>
 <div class="row">
   <button id="send">送信</button>
   <label><input type="checkbox" id="enter"> 送信後に Enter</label>
@@ -213,6 +213,7 @@
       const m = document.body.classList.contains("k-" + b.dataset.kmode) ? "none" : b.dataset.kmode;
       setKmode(m);
       if (m === "en") $("direct").focus();
+      if (m === "ja") $("text").focus();  // すぐキーボードが出て、音声入力ボタンを押せる
     };
   });
   let savedK = "ja";

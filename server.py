@@ -111,8 +111,10 @@ def type_text(text):
     if win:
         return win.send("text " + base64.b64encode(text.encode()).decode())
     # 打ち始めに少し待つ。wtype は毎回仮想キーボードを作り直すので、
-    # すぐ打つと受け側の準備が間に合わず 1 文字目が落ちることがある
-    wtype(["-s", "80", "--", text])
+    # すぐ打つと受け側の準備が間に合わず 1 文字目が落ちることがある。
+    # Brave（Chromium）はキー配置が変わった直後の 1 キーを落とすことがあるので、
+    # 先にどのアプリも使わない F24 を押して、落ちるならそれが落ちるようにする
+    wtype(["-s", "80", "-k", "F24", "-s", "30", "--", text])
 
 
 def press(key):
