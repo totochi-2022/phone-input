@@ -52,14 +52,20 @@
   #qrUrl { font-size: 13px; color: #ccc; word-break: break-all; text-align: center; max-width: 360px; }
   body.at #atView { display: block; }
   /* 入力の 3 モード（タッチパッドのすぐ上で切り替え） */
+  .line { display: flex; gap: 6px; }
+  #text { flex: 1; min-width: 0; font-size: 18px; padding: 10px; box-sizing: border-box;
+          background: #222; color: #eee; border: 1px solid #444; border-radius: 8px; }
+  .line #send { flex: 0 0 auto; padding: 10px 16px; }
+  #direct { margin-top: 0 !important; }
+  .row label { white-space: normal; }
   .ktabs { display: flex; gap: 6px; margin-top: 8px; }
   .ktabs button { padding: 9px 2px; font-size: 14px; }
   .ktabs button.on { background: #2a5bd7; font-weight: bold; }
   .kpanel { display: none; }
-  body.k-ja #pJa, body.k-en #pEn, body.k-pc #pPc { display: block; }
-  body.k-pc .keygrid { display: none; }  /* PC キーボードに全部あるので隠す */
-  body.k-pc .padwrap { height: 28vh; }
-  body.k-none .padwrap { height: 45vh; }
+  body.k-ja #pJa, body.k-en #pEn { display: block; }
+  .padwrap { height: 28vh; }
+  body.k-none .padwrap { height: 38vh; }
+  .pckb { margin-top: 10px !important; }
   /* PC キーボード */
   .pckb { display: grid; gap: 3px; margin: 0 -9px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .pckb .r { display: flex; gap: 3px; margin: 0; }
@@ -83,26 +89,18 @@
 <div id="atView"><iframe id="atFrame" title="autotube"></iframe></div>
 <div id="inputView">
 <div class="kpanel" id="pJa">
-<textarea id="text" lang="ja" inputmode="text" placeholder="ここに音声入力して「送信」"></textarea>
-<div class="row">
+<div class="line">
+  <input id="text" type="text" lang="ja" enterkeyhint="send" autocomplete="off" placeholder="音声入力して「送信」">
   <button id="send">送信</button>
-  <label><input type="checkbox" id="enter"> 送信後に Enter</label>
-  <label><input type="checkbox" id="auto"> 自動送信</label>
 </div>
 </div>
 <div class="kpanel" id="pEn">
-<h2>打った文字がすぐテレビに送られる（f のあとのリンク文字などに）</h2>
-<input id="direct" type="password" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="ここをタップして英字キーボードで打つ">
-</div>
-<div class="kpanel" id="pPc">
-<div class="pckb" id="pckb"></div>
-<div class="pchint">Ctrl・Shift・Alt・Win：1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</div>
+<input id="direct" type="password" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="英字キーボードで打つとすぐ送信">
 </div>
 <div id="status"></div>
 <div class="ktabs">
   <button data-kmode="ja">🎤 日本語</button>
   <button data-kmode="en">⌨ 英語</button>
-  <button data-kmode="pc">🖥 PC キー</button>
 </div>
 
 <div class="padwrap">
@@ -114,25 +112,9 @@
   <button id="dclick">ダブル</button>
   <button id="rclick" class="mbtn">右クリック</button>
 </div>
-<h2>パッド：なぞる＝移動、タップ＝クリック、右の帯＝押している間スクロール。左クリックを押さえたままなぞる＝ドラッグ</h2>
-<div class="grid keygrid">
-  <button data-key="Enter">Enter</button>
-  <button data-key="BackSpace">⌫</button>
-  <button data-key="Tab">Tab</button>
-  <button data-key="ShiftTab">⇧Tab</button>
-  <button data-key="Esc">Esc</button>
-  <button data-key="Up">↑</button>
-  <button data-key="Space">空白</button>
-  <button data-key="CtrlC">Ctrl+C</button>
-  <button data-key="Left">←</button>
-  <button data-key="Down">↓</button>
-  <button data-key="Right">→</button>
-  <button data-key="CtrlL">Ctrl+L</button>
-  <button data-key="F7">F7 切替</button>
-  <button data-key="F8">F8 全画面</button>
-  <button data-key="PageUp">PgUp</button>
-  <button data-key="PageDown">PgDn</button>
-</div>
+<div class="pckb" id="pckb"></div>
+<div class="pchint">Ctrl・Shift・Alt・Win：1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）<br>
+パッド：なぞる＝移動、タップ＝クリック、右の帯＝押している間スクロール。左クリックを押さえたままなぞる＝ドラッグ</div>
 <h2>Vimium</h2>
 <div class="grid vim">
   <button data-text="f">f<small>リンク</small></button>
@@ -157,6 +139,11 @@
   <button data-text="/">/<small>ページ内</small></button>
   <button data-text="n">n<small>次</small></button>
   <button data-text="N">N<small>前</small></button>
+</div>
+<h2>設定</h2>
+<div class="row">
+  <label><input type="checkbox" id="enter"> 送信後に Enter</label>
+  <label><input type="checkbox" id="auto"> 自動送信（音声入力が止まって 1 秒後）</label>
 </div>
 </div><!-- /inputView -->
 <script>
@@ -204,7 +191,7 @@
 
   // 入力の 3 モード：日本語（音声入力）・英語（直打ち）・PC キーボード
   function setKmode(m) {
-    for (const k of ["ja", "en", "pc", "none"]) document.body.classList.toggle("k-" + k, k === m);
+    for (const k of ["ja", "en", "none"]) document.body.classList.toggle("k-" + k, k === m);
     document.querySelectorAll("[data-kmode]").forEach((b) => b.classList.toggle("on", b.dataset.kmode === m));
     try { localStorage.setItem("kmode", m); } catch (e) {}
   }
@@ -218,6 +205,7 @@
   });
   let savedK = "ja";
   try { savedK = localStorage.getItem("kmode") || "ja"; } catch (e) {}
+  if (!["ja", "en", "none"].includes(savedK)) savedK = "ja";
   setKmode(savedK);
 
   function status(msg, err) { $("status").textContent = msg; $("status").className = err ? "err" : ""; }
@@ -245,6 +233,9 @@
 
   // 自動送信：音声入力などでまとめて文字が入ったら、入力が止まって 1 秒後に送る（1 文字ずつの手打ちでは送らない）
   let autoTimer = null, bulk = false, taComposing = false;
+  $("text").addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.keyCode === 13) && !e.isComposing && !taComposing) { e.preventDefault(); $("send").click(); }
+  });
   $("text").addEventListener("compositionstart", () => { taComposing = true; });
   $("text").addEventListener("compositionend", () => { taComposing = false; });
   $("text").addEventListener("input", (e) => {
