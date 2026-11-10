@@ -198,6 +198,55 @@ def make_uinput():
 
 
 umouse = make_uinput()
+
+
+class UInputKeyboard:
+    """uinput の仮想キーボード（入力ページの「PC キー」用）。Linux のキーコードをそのまま送る"""
+
+    NAME = b"phone-input virtual keyboard"
+    CODES = range(1, 128)  # ESC〜F12・矢印・Home/End・かな(93)・Win(125) を含む範囲
+
+    def __init__(self):
+        import fcntl
+        self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+        fcntl.ioctl(self.fd, 0x40045564, 1)  # UI_SET_EVBIT EV_KEY
+        for code in self.CODES:
+            fcntl.ioctl(self.fd, 0x40045565, code)  # UI_SET_KEYBIT
+        dev = struct.pack("80sHHHHi", self.NAME, 0x03, 0x1209, 0x706b, 1, 0) + bytes(4 * 64 * 4)
+        os.write(self.fd, dev)
+        fcntl.ioctl(self.fd, 0x5501)  # UI_DEV_CREATE
+        self.lock = threading.Lock()
+
+    def _key(self, code, value):
+        now = time.time()
+        sec, usec = int(now), int((now % 1) * 1e6)
+        os.write(self.fd, struct.pack("llHHi", sec, usec, 1, code, value) +
+                 struct.pack("llHHi", sec, usec, 0, 0, 0))
+
+    def press(self, code, mods=()):
+        """修飾キーを押す → キーを押して離す → 修飾キーを離す"""
+        with self.lock:
+            for m in mods:
+                self._key(m, 1)
+                time.sleep(0.01)
+            self._key(code, 1)
+            time.sleep(0.02)
+            self._key(code, 0)
+            for m in reversed(mods):
+                time.sleep(0.01)
+                self._key(m, 0)
+
+
+def make_ukbd():
+    if IS_WSL:
+        return None
+    try:
+        return UInputKeyboard()
+    except OSError:
+        return None
+
+
+ukbd = make_ukbd()
 last_mouse = time.time()  # 最後に /mouse を受けた時刻。押しっぱなしの安全装置用
 
 
@@ -332,6 +381,14 @@ class Handler(BaseHTTPRequestHandler):
                     mouse_click(data["click"])
                 for op in data.get("ops", []):  # 押す・離す・ダブルクリックなど。移動のあとに順に実行
                     mouse_op(op)
+            elif path == "/kbd":
+                if not ukbd:
+                    return self._reply(500, "仮想キーボードが使えません（/dev/uinput の権限）".encode())
+                code = int(data.get("code", 0))
+                mods = [int(m) for m in data.get("mods", [])]
+                if not all(c in UInputKeyboard.CODES for c in [code, *mods]):
+                    return self._reply(400, b"unknown key")
+                ukbd.press(code, mods)
             elif path == "/key":
                 key = data.get("key")
                 if key not in KEYS:

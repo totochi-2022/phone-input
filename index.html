@@ -51,6 +51,26 @@
   #qrImg img { width: min(70vw, 320px); height: auto; image-rendering: pixelated; }
   #qrUrl { font-size: 13px; color: #ccc; word-break: break-all; text-align: center; max-width: 360px; }
   body.at #atView { display: block; }
+  /* 入力の 3 モード（タッチパッドのすぐ上で切り替え） */
+  .ktabs { display: flex; gap: 6px; margin-top: 8px; }
+  .ktabs button { padding: 9px 2px; font-size: 14px; }
+  .ktabs button.on { background: #2a5bd7; font-weight: bold; }
+  .kpanel { display: none; }
+  body.k-ja #pJa, body.k-en #pEn, body.k-pc #pPc { display: block; }
+  body.k-pc .keygrid { display: none; }  /* PC キーボードに全部あるので隠す */
+  body.k-pc .padwrap { height: 28vh; }
+  body.k-none .padwrap { height: 45vh; }
+  /* PC キーボード */
+  .pckb { display: grid; gap: 3px; margin: 0 -9px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .pckb .r { display: flex; gap: 3px; margin: 0; }
+  .pckb .k { flex: 1 1 0; min-width: 0; height: 44px; border: 0; border-radius: 5px; padding: 0;
+             background: #333; color: #eee; font-size: 15px; touch-action: manipulation; overflow: hidden; }
+  .pckb .k.f { height: 34px; font-size: 11px; background: #2a2a33; }
+  .pckb .k.mod { background: #2b3440; font-size: 12px; }
+  .pckb .k.on { background: #2a5bd7; color: #fff; }
+  .pckb .k.lock { background: #d7802a; color: #fff; }
+  .pckb .k.down { background: #777; }
+  .pchint { font-size: 11px; color: #777; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -62,16 +82,40 @@
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="atView"><iframe id="atFrame" title="autotube"></iframe></div>
 <div id="inputView">
+<div class="kpanel" id="pJa">
 <textarea id="text" placeholder="ここに音声入力して「送信」"></textarea>
 <div class="row">
   <button id="send">送信</button>
   <label><input type="checkbox" id="enter"> 送信後に Enter</label>
   <label><input type="checkbox" id="auto"> 自動送信</label>
 </div>
-<div id="status"></div>
-<h2>直打ち（打った文字がすぐテレビに送られる。f のあとのリンク文字などに）</h2>
+</div>
+<div class="kpanel" id="pEn">
+<h2>打った文字がすぐテレビに送られる（f のあとのリンク文字などに）</h2>
 <input id="direct" type="password" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="ここをタップして英字キーボードで打つ">
-<div class="grid">
+</div>
+<div class="kpanel" id="pPc">
+<div class="pckb" id="pckb"></div>
+<div class="pchint">Ctrl・Shift・Alt・Win：1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</div>
+</div>
+<div id="status"></div>
+<div class="ktabs">
+  <button data-kmode="ja">🎤 日本語</button>
+  <button data-kmode="en">⌨ 英語</button>
+  <button data-kmode="pc">🖥 PC キー</button>
+</div>
+
+<div class="padwrap">
+  <div id="pad"></div>
+  <div id="wheel"><span>▲</span><span>押している間<br>スクロール</span><span>▼</span></div>
+</div>
+<div class="row">
+  <button id="lclick" class="mbtn">左クリック</button>
+  <button id="dclick">ダブル</button>
+  <button id="rclick" class="mbtn">右クリック</button>
+</div>
+<h2>パッド：なぞる＝移動、タップ＝クリック、右の帯＝押している間スクロール。左クリックを押さえたままなぞる＝ドラッグ</h2>
+<div class="grid keygrid">
   <button data-key="Enter">Enter</button>
   <button data-key="BackSpace">⌫</button>
   <button data-key="Tab">Tab</button>
@@ -88,16 +132,6 @@
   <button data-key="F8">F8 全画面</button>
   <button data-key="PageUp">PgUp</button>
   <button data-key="PageDown">PgDn</button>
-</div>
-<h2>タッチパッド（なぞる＝移動、タップ＝クリック、右の帯＝押している間スクロール。左クリックを押さえたままなぞる＝ドラッグ）</h2>
-<div class="padwrap">
-  <div id="pad"></div>
-  <div id="wheel"><span>▲</span><span>押している間<br>スクロール</span><span>▼</span></div>
-</div>
-<div class="row">
-  <button id="lclick" class="mbtn">左クリック</button>
-  <button id="dclick">ダブル</button>
-  <button id="rclick" class="mbtn">右クリック</button>
 </div>
 <h2>Vimium</h2>
 <div class="grid vim">
@@ -167,6 +201,23 @@
     } catch (e) { alert("QR コードを作れませんでした: " + e.message); }
   };
   $("qr").onclick = () => $("qr").classList.remove("on");
+
+  // 入力の 3 モード：日本語（音声入力）・英語（直打ち）・PC キーボード
+  function setKmode(m) {
+    for (const k of ["ja", "en", "pc", "none"]) document.body.classList.toggle("k-" + k, k === m);
+    document.querySelectorAll("[data-kmode]").forEach((b) => b.classList.toggle("on", b.dataset.kmode === m));
+    try { localStorage.setItem("kmode", m); } catch (e) {}
+  }
+  document.querySelectorAll("[data-kmode]").forEach((b) => {
+    b.onclick = () => {  // 開いているタブをもう一度押すと閉じる（タッチパッドを広く使える）
+      const m = document.body.classList.contains("k-" + b.dataset.kmode) ? "none" : b.dataset.kmode;
+      setKmode(m);
+      if (m === "en") $("direct").focus();
+    };
+  });
+  let savedK = "ja";
+  try { savedK = localStorage.getItem("kmode") || "ja"; } catch (e) {}
+  setKmode(savedK);
 
   function status(msg, err) { $("status").textContent = msg; $("status").className = err ? "err" : ""; }
 
@@ -319,6 +370,67 @@
   document.addEventListener("visibilitychange", () => { if (document.hidden) releases.forEach((r) => r()); });
   window.addEventListener("pagehide", () => releases.forEach((r) => r()));
   $("dclick").onclick = () => mouseOp("dbl", "left");
+
+  // PC キーボード：[表示, Shift 時の表示, Linux のキーコード, 幅, 種類]。指を置いた瞬間に送る
+  const PC_ROWS = [
+    [["Esc",,1],["F1",,59],["F2",,60],["F3",,61],["F4",,62],["F5",,63],["F6",,64],["F7",,65],["F8",,66],
+     ["F9",,67],["F10",,68],["F11",,87],["F12",,88],["Del",,111]].map((k) => [...k, 1, "f"]),
+    [["`","~",41],["1","!",2],["2","@",3],["3","#",4],["4","$",5],["5","%",6],["6","^",7],["7","&",8],
+     ["8","*",9],["9","(",10],["0",")",11],["-","_",12],["=","+",13],["⌫",,14,1.5]],
+    [["Tab",,15,1.5],["q","Q",16],["w","W",17],["e","E",18],["r","R",19],["t","T",20],["y","Y",21],["u","U",22],
+     ["i","I",23],["o","O",24],["p","P",25],["[","{",26],["]","}",27],["\\","|",43]],
+    [["かな",,93,1.6],["a","A",30],["s","S",31],["d","D",32],["f","F",33],["g","G",34],["h","H",35],["j","J",36],
+     ["k","K",37],["l","L",38],[";",":",39],["'","\"",40],["Enter",,28,1.9]],
+    [["Shift",,42,2],["z","Z",44],["x","X",45],["c","C",46],["v","V",47],["b","B",48],["n","N",49],
+     ["m","M",50],[",","<",51],[".",">",52],["/","?",53],["↑",,103],["PgUp",,104]],
+    [["Ctrl",,29,1.4],["Win",,125,1.2],["Alt",,56,1.2],["Space",,57,4],
+     ["Home",,102],["End",,107],["←",,105],["↓",,108],["→",,106],["PgDn",,109]],
+  ];
+  const PC_MODS = new Set([29, 42, 56, 125]);
+  const pcMod = {};  // キーコード -> "on"（次の 1 キー） / "lock"（押したまま）
+  let pcLastTap = { code: 0, t: 0 };
+  const pcEls = [];
+  for (const row of PC_ROWS) {
+    const r = document.createElement("div"); r.className = "r";
+    for (const [label, shifted, code, w = 1, kind = ""] of row) {
+      const b = document.createElement("button");
+      b.className = "k " + (PC_MODS.has(code) ? "mod" : kind);
+      b.style.flexGrow = w;
+      b.dataset.code = code; b.dataset.label = label;
+      if (shifted) b.dataset.shifted = shifted;
+      b.textContent = label;
+      r.appendChild(b); pcEls.push(b);
+    }
+    $("pckb").appendChild(r);
+  }
+  function pcRender() {
+    const shift = !!pcMod[42];
+    for (const b of pcEls) {
+      const c = Number(b.dataset.code);
+      b.classList.toggle("on", pcMod[c] === "on");
+      b.classList.toggle("lock", pcMod[c] === "lock");
+      if (b.dataset.shifted) b.textContent = shift ? b.dataset.shifted : b.dataset.label;
+    }
+  }
+  $("pckb").addEventListener("pointerdown", (e) => {
+    const b = e.target.closest(".k"); if (!b) return;
+    e.preventDefault();
+    b.classList.add("down"); setTimeout(() => b.classList.remove("down"), 120);
+    if (navigator.vibrate) navigator.vibrate(8);
+    const code = Number(b.dataset.code);
+    if (PC_MODS.has(code)) {
+      const now = Date.now(), dbl = pcLastTap.code === code && now - pcLastTap.t < 350;
+      pcLastTap = { code, t: now };
+      if (dbl) pcMod[code] = "lock"; else if (pcMod[code]) delete pcMod[code]; else pcMod[code] = "on";
+      pcRender();
+      return;
+    }
+    const mods = Object.keys(pcMod).map(Number);
+    for (const c of mods) if (pcMod[c] === "on") delete pcMod[c];  // 1 回だけの修飾キーは使ったら外す
+    pcRender();
+    enqueue(() => post("/kbd", { code, mods }));  // 順番どおりに送る
+  });
+  $("pckb").addEventListener("contextmenu", (e) => e.preventDefault());
 
   document.querySelectorAll("[data-text]").forEach((b) => {
     b.onclick = async () => {
