@@ -77,6 +77,8 @@
   .pckb .k { flex: 1 1 0; min-width: 0; height: 44px; border: 0; border-radius: 5px; padding: 0;
              background: #333; color: #eee; font-size: 15px; touch-action: manipulation; overflow: hidden; }
   .pckb .k.f { height: 34px; font-size: 11px; background: #2a2a33; }
+  /* F7・F8・かな：指を置いたまま少し動いても、ブラウザがタッチを取り消さない（取り消されると離したことになる） */
+  .pckb .k.th { touch-action: none; }
   .pckb .k.mod { background: #2b3440; font-size: 12px; }
   .pckb .k.on { background: #2a5bd7; color: #fff; }
   .pckb .k.lock { background: #d7802a; color: #fff; }
@@ -394,14 +396,18 @@
      ["Home",,102],["End",,107],["←",,105],["↓",,108],["→",,106],["PgDn",,109]],
   ];
   const PC_MODS = new Set([29, 42, 56, 125]);
-  const pcMod = {};  // キーコード -> "on"（次の 1 キー） / "lock"（押したまま）
+  // 指を置いている間だけ押したままにするキー（F7・F8・かな・Space）。テレビ側の keyd で「押しながら他のキー」に使う
+  // （Space は SandS：押している間は Shift、単独ならスペース）。指を離した瞬間に離すので、単独で連打もできる
+  const PC_TOUCH_HOLD = new Set([65, 66, 93, 57]);
+  const pcMod = {};  // キーコード -> "on"（次の 1 キー） / "lock"（押したまま） / "hold"（指を置いている間）
+  const pcTouch = new Map();  // pointerId -> 指で押さえているキーコード
   let pcLastTap = { code: 0, t: 0 };
   const pcEls = [];
   for (const row of PC_ROWS) {
     const r = document.createElement("div"); r.className = "r";
     for (const [label, shifted, code, w = 1, kind = ""] of row) {
       const b = document.createElement("button");
-      b.className = "k " + (PC_MODS.has(code) ? "mod" : kind);
+      b.className = "k " + (PC_MODS.has(code) ? "mod" : kind) + (PC_TOUCH_HOLD.has(code) ? " th" : "");
       b.style.flexGrow = w;
       b.dataset.code = code; b.dataset.label = label;
       if (shifted) b.dataset.shifted = shifted;
@@ -411,11 +417,11 @@
     $("pckb").appendChild(r);
   }
   function pcRender() {
-    const shift = !!pcMod[42];
+    const shift = !!pcMod[42] || pcMod[57] === "hold";  // Space を押さえている間も（SandS）Shift の表示に
     for (const b of pcEls) {
       const c = Number(b.dataset.code);
       b.classList.toggle("on", pcMod[c] === "on");
-      b.classList.toggle("lock", pcMod[c] === "lock");
+      b.classList.toggle("lock", pcMod[c] === "lock" || pcMod[c] === "hold");
       if (b.dataset.shifted) b.textContent = shift ? b.dataset.shifted : b.dataset.label;
     }
   }
@@ -425,6 +431,13 @@
     b.classList.add("down"); setTimeout(() => b.classList.remove("down"), 120);
     if (navigator.vibrate) navigator.vibrate(8);
     const code = Number(b.dataset.code);
+    if (PC_TOUCH_HOLD.has(code)) {
+      if (pcMod[code]) return;  // 別の指ですでに押さえている
+      try { b.setPointerCapture(e.pointerId); } catch (_) {}
+      pcTouch.set(e.pointerId, code);
+      pcMod[code] = "hold"; pcHold(code, true); pcRender();
+      return;
+    }
     if (PC_MODS.has(code)) {
       const now = Date.now(), dbl = pcLastTap.code === code && now - pcLastTap.t < 350;
       pcLastTap = { code, t: now };
@@ -439,6 +452,15 @@
     enqueue(() => post("/kbd", { code, mods: [] }));  // 修飾キーはもう押してあるので、そのキーだけ送る
     pcConsume();
   });
+  // F7・F8・かなは、その指を離したら離す（キーの外で離しても・タッチが取り消されても）
+  const pcTouchEnd = (e) => {
+    const code = pcTouch.get(e.pointerId);
+    if (code === undefined) return;
+    pcTouch.delete(e.pointerId);
+    if (pcMod[code] === "hold") { delete pcMod[code]; pcHold(code, false); pcRender(); }
+  };
+  window.addEventListener("pointerup", pcTouchEnd);
+  window.addEventListener("pointercancel", pcTouchEnd);
   function pcHold(code, down) {
     enqueue(() => post("/kbd", { op: down ? "down" : "up", code }));
     pcPing();
@@ -454,6 +476,7 @@
   function pcReleaseAll() {
     const codes = Object.keys(pcMod).map(Number);
     for (const c of codes) delete pcMod[c];
+    pcTouch.clear();
     for (const c of codes) fetch("/kbd", { method: "POST", keepalive: true,
       headers: { "Content-Type": "application/json", "X-Token": token }, body: JSON.stringify({ op: "up", code: c }) });
     pcRender(); pcPing();
