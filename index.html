@@ -396,9 +396,9 @@
      ["Home",,102],["End",,107],["←",,105],["↓",,108],["→",,106],["PgDn",,109]],
   ];
   const PC_MODS = new Set([29, 42, 56, 125]);
-  // 指を置いている間だけ押したままにするキー（F7・F8・かな・Space）。テレビ側の keyd で「押しながら他のキー」に使う
+  // 指を置いている間だけ押したままにするキー（F6・F7・F8・かな・Space）。テレビ側の keyd で「押しながら他のキー」に使う
   // （Space は SandS：押している間は Shift、単独ならスペース）。指を離した瞬間に離すので、単独で連打もできる
-  const PC_TOUCH_HOLD = new Set([65, 66, 93, 57]);
+  const PC_TOUCH_HOLD = new Set([64, 65, 66, 93, 57]);
   const pcMod = {};  // キーコード -> "on"（次の 1 キー） / "lock"（押したまま） / "hold"（指を置いている間）
   const pcTouch = new Map();  // pointerId -> 指で押さえているキーコード
   let pcLastTap = { code: 0, t: 0 };

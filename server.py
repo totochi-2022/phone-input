@@ -107,9 +107,47 @@ class WinInput:
 win = WinInput() if IS_WSL else None
 
 
+# 文字 → (キーコード, Shift) 。JIS 配列。wtype が使えないとき（ログイン画面など、
+# labwc がまだ動いていないとき）に uinput の仮想キーボードで打つ用。ASCII だけ
+JIS = {" ": (57, False), "\n": (28, False), "\t": (15, False)}
+for _row, _codes in (("1234567890", range(2, 12)), ("qwertyuiop", range(16, 26)),
+                     ("asdfghjkl", range(30, 39)), ("zxcvbnm", range(44, 51))):
+    for _c, _k in zip(_row, _codes):
+        JIS[_c] = (_k, False)
+        if _c.isalpha():
+            JIS[_c.upper()] = (_k, True)
+for _c, _k in zip('!"#$%&\'()', range(2, 11)):
+    JIS[_c] = (_k, True)
+for _c, _k, _sh in (("-", 12, False), ("=", 12, True), ("^", 13, False), ("~", 13, True),
+                    ("|", 124, True), ("@", 26, False), ("`", 26, True), ("[", 27, False), ("{", 27, True),
+                    (";", 39, False), ("+", 39, True), (":", 40, False), ("*", 40, True),
+                    ("]", 43, False), ("}", 43, True), (",", 51, False), ("<", 51, True),
+                    (".", 52, False), (">", 52, True), ("/", 53, False), ("?", 53, True),
+                    ("\\", 89, False), ("_", 89, True)):
+    JIS[_c] = (_k, _sh)
+
+
+def uinput_type(text):
+    """uinput の仮想キーボードで 1 文字ずつ打つ（JIS 配列・ASCII だけ）"""
+    bad = sorted({c for c in text if c not in JIS})
+    if bad:
+        raise RuntimeError("ログイン画面では英数字・記号しか打てません: " + "".join(bad))
+    for c in text:
+        code, shift = JIS[c]
+        ukbd.press(code, (42,) if shift else ())
+        time.sleep(0.01)
+
+
+def wayland_up():
+    return os.path.exists(os.path.join(ENV.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"),
+                                       ENV.get("WAYLAND_DISPLAY", "wayland-0")))
+
+
 def type_text(text):
     if win:
         return win.send("text " + base64.b64encode(text.encode()).decode())
+    if ukbd and not wayland_up():  # ログイン画面（labwc がまだ無い）
+        return uinput_type(text)
     # 打ち始めに少し待つ。wtype は毎回仮想キーボードを作り直すので、
     # すぐ打つと受け側の準備が間に合わず 1 文字目が落ちることがある。
     # Brave（Chromium）はキー配置が変わった直後の 1 キーを落とすことがあるので、
@@ -117,10 +155,22 @@ def type_text(text):
     wtype(["-s", "80", "-k", "F24", "-s", "30", "--", text])
 
 
+# ボタン名 → uinput のキーコード（キー, 修飾キー）。ログイン画面用
+UKEYS = {
+    "Enter": (28, ()), "BackSpace": (14, ()), "Tab": (15, ()), "ShiftTab": (15, (42,)), "Esc": (1, ()),
+    "Up": (103, ()), "Down": (108, ()), "Left": (105, ()), "Right": (106, ()), "Space": (57, ()),
+    "F7": (65, ()), "F8": (66, ()), "CtrlC": (46, (29,)), "CtrlL": (38, (29,)),
+    "PageUp": (104, ()), "PageDown": (109, ()),
+}
+
+
 def press(key):
     if win:
         mods, vk = WIN_KEYS[key]
         return win.send(f"key {','.join(f'{m:X}' for m in mods) or '-'} {vk:X}")
+    if ukbd and not wayland_up() and key in UKEYS:  # ログイン画面
+        code, mods = UKEYS[key]
+        return ukbd.press(code, mods)
     wtype(KEYS[key])
 
 
