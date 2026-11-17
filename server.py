@@ -252,6 +252,65 @@ def make_uinput():
 umouse = make_uinput()
 
 
+class UInputTablet:
+    """画面の位置を指定してクリックする仮想マウス（絶対座標、0〜65535 が画面の端から端）。
+    Brave の拡張機能 tv-fullscreen が「スキップ」などのボタンを本物のクリックで押すのに使う（/click）。
+    ページが作る偽のクリック（isTrusted: false）を無視するサイトがあるため"""
+
+    NAME = b"phone-input virtual tablet"
+    EV_SYN, EV_KEY, EV_ABS = 0, 1, 3
+    ABS_X, ABS_Y, MAX = 0x00, 0x01, 65535
+    BTN_LEFT = 0x110
+
+    def __init__(self):
+        import fcntl
+        self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+        UI_SET_EVBIT, UI_SET_KEYBIT, UI_SET_ABSBIT, UI_DEV_CREATE = 0x40045564, 0x40045565, 0x40045567, 0x5501
+        for ev in (self.EV_KEY, self.EV_ABS):
+            fcntl.ioctl(self.fd, UI_SET_EVBIT, ev)
+        fcntl.ioctl(self.fd, UI_SET_KEYBIT, self.BTN_LEFT)
+        for code in (self.ABS_X, self.ABS_Y):
+            fcntl.ioctl(self.fd, UI_SET_ABSBIT, code)
+        # struct uinput_user_dev: name, input_id, ff_effects_max, absmax[64], absmin[64], absfuzz[64], absflat[64]
+        absmax = [0] * 64
+        absmax[self.ABS_X] = absmax[self.ABS_Y] = self.MAX
+        dev = struct.pack("80sHHHHi", self.NAME, 0x03, 0x1209, 0x7074, 1, 0) + \
+            struct.pack("64i", *absmax) + bytes(4 * 64 * 3)
+        os.write(self.fd, dev)
+        fcntl.ioctl(self.fd, UI_DEV_CREATE)
+        self.lock = threading.Lock()
+
+    def _emit(self, events):
+        now = time.time()
+        sec, usec = int(now), int((now % 1) * 1e6)
+        data = b"".join(struct.pack("llHHi", sec, usec, t, c, v) for t, c, v in events)
+        data += struct.pack("llHHi", sec, usec, self.EV_SYN, 0, 0)
+        os.write(self.fd, data)
+
+    def click(self, fx, fy):
+        """fx, fy：画面の幅・高さに対する割合（0〜1）"""
+        x = round(min(1, max(0, fx)) * self.MAX)
+        y = round(min(1, max(0, fy)) * self.MAX)
+        with self.lock:
+            self._emit([(self.EV_ABS, self.ABS_X, x), (self.EV_ABS, self.ABS_Y, y)])
+            time.sleep(0.05)
+            self._emit([(self.EV_KEY, self.BTN_LEFT, 1)])
+            time.sleep(0.03)
+            self._emit([(self.EV_KEY, self.BTN_LEFT, 0)])
+
+
+def make_tablet():
+    if IS_WSL:
+        return None
+    try:
+        return UInputTablet()
+    except OSError:
+        return None
+
+
+utablet = make_tablet()
+
+
 class UInputKeyboard:
     """uinput の仮想キーボード（入力ページの「PC キー」用）。Linux のキーコードをそのまま送る"""
 
@@ -469,6 +528,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not all(c in UInputKeyboard.CODES for c in [code, *mods]):
                     return self._reply(400, b"unknown key")
                 ukbd.press(code, mods)
+            elif path == "/click":  # 画面の位置（割合）を本物のクリックで押す。拡張機能 tv-fullscreen のスキップ用
+                if not utablet:
+                    return self._reply(500, "仮想マウスが使えません（/dev/uinput の権限）".encode())
+                utablet.click(float(data["fx"]), float(data["fy"]))
             elif path == "/key":
                 key = data.get("key")
                 if key not in KEYS:
