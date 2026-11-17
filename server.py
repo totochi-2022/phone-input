@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 PORT = 8765
 BASE = Path(__file__).resolve().parent
 TOKEN_FILE = BASE / "token"
+EXTLOG = Path.home() / ".local/state/tv-fullscreen/ext.log"  # /extlog の書き先
 PAGE = (BASE / "index.html").read_bytes()
 IS_WSL = bool(os.environ.get("WSL_DISTRO_NAME"))
 
@@ -287,12 +288,20 @@ class UInputTablet:
         data += struct.pack("llHHi", sec, usec, self.EV_SYN, 0, 0)
         os.write(self.fd, data)
 
-    def click(self, fx, fy):
-        """fx, fy：画面の幅・高さに対する割合（0〜1）"""
+    def _move(self, fx, fy):
         x = round(min(1, max(0, fx)) * self.MAX)
         y = round(min(1, max(0, fy)) * self.MAX)
+        self._emit([(self.EV_ABS, self.ABS_X, x), (self.EV_ABS, self.ABS_Y, y)])
+
+    def move(self, fx, fy):
+        """矢印を動かすだけ（クリックしない）。全画面でないときに、拡張機能がページの位置のずれを測るのに使う"""
         with self.lock:
-            self._emit([(self.EV_ABS, self.ABS_X, x), (self.EV_ABS, self.ABS_Y, y)])
+            self._move(fx, fy)
+
+    def click(self, fx, fy):
+        """fx, fy：画面の幅・高さに対する割合（0〜1）"""
+        with self.lock:
+            self._move(fx, fy)
             time.sleep(0.05)
             self._emit([(self.EV_KEY, self.BTN_LEFT, 1)])
             time.sleep(0.03)
@@ -531,7 +540,16 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/click":  # 画面の位置（割合）を本物のクリックで押す。拡張機能 tv-fullscreen のスキップ用
                 if not utablet:
                     return self._reply(500, "仮想マウスが使えません（/dev/uinput の権限）".encode())
-                utablet.click(float(data["fx"]), float(data["fy"]))
+                if data.get("move_only"):
+                    utablet.move(float(data["fx"]), float(data["fy"]))
+                else:
+                    utablet.click(float(data["fx"]), float(data["fy"]))
+            elif path == "/extlog":  # 拡張機能 tv-fullscreen の記録（スキップなどのボタンの中身）。打った文字は来ない
+                EXTLOG.parent.mkdir(exist_ok=True)
+                if EXTLOG.exists() and EXTLOG.stat().st_size > 1_000_000:
+                    EXTLOG.rename(EXTLOG.with_suffix(".log.1"))
+                with EXTLOG.open("a") as f:
+                    f.write(json.dumps({"t": time.strftime("%Y-%m-%d %H:%M:%S"), **data}, ensure_ascii=False) + "\n")
             elif path == "/key":
                 key = data.get("key")
                 if key not in KEYS:
