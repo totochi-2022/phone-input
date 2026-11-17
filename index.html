@@ -458,6 +458,7 @@
     if (code === undefined) return;
     pcTouch.delete(e.pointerId);
     if (pcMod[code] === "hold") { delete pcMod[code]; pcHold(code, false); pcRender(); }
+    pcConsume();  // 1 回だけ（青）の Shift なども、ほかのキーと同じくここで離す（F7 を離すまでは押したまま）
   };
   window.addEventListener("pointerup", pcTouchEnd);
   window.addEventListener("pointercancel", pcTouchEnd);
