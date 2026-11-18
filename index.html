@@ -46,7 +46,10 @@
   #atView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
   #atView iframe { width: 100%; height: 100%; border: 0; background: #111; }
   body.at #inputView { display: none; }
-  .modebar #qrBtn { flex: 0 0 auto; padding: 9px 12px; }
+  #bmView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
+  #bmView iframe { width: 100%; height: 100%; border: 0; background: #111; }
+  body.bm #inputView { display: none; }
+  body.bm #bmView { display: block; }
   #qr { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.85);
         align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 16px; }
   #qr.on { display: flex; }
@@ -90,10 +93,11 @@
 <div class="modebar" id="modebar">
   <button data-mode="input">⌨ 入力</button>
   <button data-mode="at">▶ autotube</button>
-  <button id="qrBtn" title="スマホで開くための QR コード">QR</button>
+  <button data-mode="bm" title="テレビの Brave のブックマークを開く（autotube の /bookmarks）">🔖 ブックマーク</button>
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="atView"><iframe id="atFrame" title="autotube"></iframe></div>
+<div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe></div>
 <div id="inputView">
 <div class="kpanel" id="pJa">
 <div class="line">
@@ -152,6 +156,7 @@
   <label><input type="checkbox" id="enter"> 送信後に Enter</label>
   <label><input type="checkbox" id="auto"> 自動送信（音声入力が止まって 1 秒後）</label>
 </div>
+<p style="text-align:center;margin-top:16px"><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
 </div><!-- /inputView -->
 <script>
   const token = new URLSearchParams(location.search).get("t") || "";
@@ -165,12 +170,17 @@
   const AUTOTUBE_PORT = 8766;
   function setMode(mode) {
     document.body.classList.toggle("at", mode === "at");
+    document.body.classList.toggle("bm", mode === "bm");
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {
       $("atView").style.top = $("modebar").offsetHeight + "px";
       if (!$("atFrame").src) {
         $("atFrame").src = `${location.protocol}//${location.hostname}:${AUTOTUBE_PORT}/?t=${encodeURIComponent(token)}`;
       }
+    }
+    if (mode === "bm") {  // テレビの Brave のブックマーク（autotube の /bookmarks）。開くたびに読み直す
+      $("bmView").style.top = $("modebar").offsetHeight + "px";
+      $("bmFrame").src = `${location.protocol}//${location.hostname}:${AUTOTUBE_PORT}/bookmarks?t=${encodeURIComponent(token)}`;
     }
     try { localStorage.setItem("mode", mode); } catch (e) {}
   }
