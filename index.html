@@ -125,6 +125,7 @@
 </div>
 <div class="pckb" id="pckb"></div>
 <div class="pchint">Ctrl・Shift・Alt・Win：1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）<br>
+F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作が続けて打てる）。もう一度 F6 か Shift で解除<br>
 パッド：なぞる＝移動、タップ＝クリック、右の帯＝押している間スクロール。左クリックを押さえたままなぞる＝ドラッグ</div>
 <h2>Vimium</h2>
 <div class="grid vim">
@@ -431,7 +432,7 @@
     for (const b of pcEls) {
       const c = Number(b.dataset.code);
       b.classList.toggle("on", pcMod[c] === "on");
-      b.classList.toggle("lock", pcMod[c] === "lock" || pcMod[c] === "hold");
+      b.classList.toggle("lock", pcMod[c] === "lock" || pcMod[c] === "hold" || pcMod[c] === "f6lock");
       if (b.dataset.shifted) b.textContent = shift ? b.dataset.shifted : b.dataset.label;
     }
   }
@@ -441,6 +442,14 @@
     b.classList.add("down"); setTimeout(() => b.classList.remove("down"), 120);
     if (navigator.vibrate) navigator.vibrate(8);
     const code = Number(b.dataset.code);
+    // F6 ロック：F6 を押さえたまま Shift で F6 を押しっぱなしに（動画の操作を F6 なしで続けて打てる）。もう一度 F6 か Shift で解除
+    if (pcMod[64] === "f6lock" && (code === 64 || code === 42)) { pcF6Unlock(); return; }
+    if (code === 42 && pcMod[64] === "hold") {
+      pcMod[64] = "f6lock";
+      for (const [id, c] of pcTouch) if (c === 64) pcTouch.delete(id);  // 指を離しても離さない
+      pcRender();
+      return;
+    }
     if (PC_TOUCH_HOLD.has(code)) {
       if (pcMod[code]) return;  // 別の指ですでに押さえている
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
@@ -472,6 +481,12 @@
   };
   window.addEventListener("pointerup", pcTouchEnd);
   window.addEventListener("pointercancel", pcTouchEnd);
+  function pcF6Unlock() {
+    delete pcMod[64];
+    // 何も打たずに離すと keyd が F6 の単独押し＝F9（全画面）とみなすので、先に何もしないキー（Ctrl）を 1 回
+    enqueue(() => post("/kbd", { code: 29, mods: [] }));
+    pcHold(64, false); pcRender();
+  }
   function pcHold(code, down) {
     enqueue(() => post("/kbd", { op: down ? "down" : "up", code }));
     pcPing();
