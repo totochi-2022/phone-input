@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111111">
+<link rel="icon" href="/icon-192.png">
 <title>Pi 入力</title>
 <style>
   :root { color-scheme: dark; }
@@ -161,6 +163,14 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 </div><!-- /inputView -->
 <script>
   const token = new URLSearchParams(location.search).get("t") || "";
+  // アプリ（ホーム画面に追加）として入れられるように：manifest は合言葉付きで読ませる（開くページにも合言葉が付く）。HTTPS のときだけ
+  if (window.isSecureContext && token) {
+    const m = document.createElement("link");
+    m.rel = "manifest"; m.href = "/manifest.webmanifest?t=" + encodeURIComponent(token);
+    document.head.appendChild(m);
+    if (navigator.serviceWorker) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+  const standalone = matchMedia("(display-mode: standalone)").matches;  // アプリとして開いた（縦の固定は manifest がする）
   const $ = (id) => document.getElementById(id);
   try { $("enter").checked = localStorage.getItem("enter") === "1"; } catch (e) {}
   try { $("auto").checked = localStorage.getItem("auto") !== "0"; } catch (e) { $("auto").checked = true; }
@@ -171,7 +181,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   // 画面に触れたら全画面にして portrait に固定する（全画面から抜けたら、次に触れたときにまた）。
   // ※ autotube・ブックマークの画面（別ポートの iframe）の中を触っても届かないので、上の段か入力の画面を触ったときに
   async function lockPortrait() {
-    if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+    if (standalone || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
     try {
       await document.documentElement.requestFullscreen({ navigationUI: "hide" });
       await screen.orientation.lock("portrait");
@@ -184,7 +194,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   });
 
   // モード切り替え：autotube（web.py、既定ポート 8766）の画面を iframe で全体に出す。合言葉は共通
-  const AUTOTUBE_PORT = 8766;
+  const AUTOTUBE_PORT = location.protocol === "https:" ? 8776 : 8766;  // HTTPS のページの中に http のページは出せない
   function setMode(mode) {
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");

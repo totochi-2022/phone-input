@@ -20,6 +20,10 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 PORT = 8765
+# HTTPS の入口（スマホでアプリとして入れるため）。証明書は mkcert で作った自分用の認証局のもの（~/.local/share/tonzura-tls、
+# リポジトリには入れない）。無ければ HTTPS は開かない。スマホに入れる認証局の証明書は /ca.crt で配る
+HTTPS_PORT = 8775
+TLS_DIR = Path.home() / ".local/share/tonzura-tls"
 BASE = Path(__file__).resolve().parent
 TOKEN_FILE = BASE / "token"
 EXTLOG = Path.home() / ".local/state/tv-fullscreen/ext.log"  # /extlog の書き先
@@ -484,8 +488,31 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    STATIC = {"/sw.js": ("sw.js", "text/javascript; charset=utf-8"),
+              "/icon-192.png": ("icon-192.png", "image/png"), "/icon-512.png": ("icon-512.png", "image/png")}
+
     def do_GET(self):
         path = urlparse(self.path).path
+        if path in self.STATIC:  # 合言葉なしで出してよいもの（アプリのアイコンなど）
+            name, ctype = self.STATIC[path]
+            return self._reply(200, (BASE / name).read_bytes(), ctype)
+        if path == "/ca.crt":  # スマホに入れる認証局の証明書（公開してよい側だけ。鍵は出さない）
+            import ssl
+            try:
+                der = ssl.PEM_cert_to_DER_cert((TLS_DIR / "ca/rootCA.pem").read_text())
+            except OSError:
+                return self._reply(404, b"no CA")
+            return self._reply(200, der, "application/x-x509-ca-cert")
+        if path == "/manifest.webmanifest":  # 合言葉付きで読まれる（開くページにも合言葉を付けるため）
+            if not self._authed():
+                return self._reply(403, b"forbidden")
+            return self._reply(200, json.dumps({
+                "name": "テレビのリモコン", "short_name": "リモコン", "lang": "ja",
+                "start_url": f"/?t={TOKEN}", "scope": "/", "display": "standalone", "orientation": "portrait",
+                "background_color": "#111111", "theme_color": "#111111",
+                "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                          {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}],
+            }, ensure_ascii=False).encode(), "application/manifest+json")
         if path not in ("/", "/info"):
             return self._reply(404, b"not found")
         if not self._authed():
@@ -569,4 +596,12 @@ if __name__ == "__main__":
     print(lan_url())
     print("マウス:", "uinput（ドラッグ可）" if umouse else ("Windows" if win else "wlrctl（ドラッグ不可）"))
     threading.Thread(target=watchdog, daemon=True).start()
+    if (TLS_DIR / "cert.pem").exists() and (TLS_DIR / "key.pem").exists():
+        import ssl
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(TLS_DIR / "cert.pem", TLS_DIR / "key.pem")
+        https = ThreadingHTTPServer(("0.0.0.0", HTTPS_PORT), Handler)
+        https.socket = ctx.wrap_socket(https.socket, server_side=True)
+        threading.Thread(target=https.serve_forever, daemon=True).start()
+        print(f"HTTPS: {HTTPS_PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
