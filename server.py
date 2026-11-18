@@ -488,7 +488,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    STATIC = {"/sw.js": ("sw.js", "text/javascript; charset=utf-8"),
+    STATIC = {"/sw.js": ("sw.js", "text/javascript; charset=utf-8"), "/share": ("share.html", "text/html; charset=utf-8"),
               "/icon-192.png": ("icon-192.png", "image/png"), "/icon-512.png": ("icon-512.png", "image/png")}
 
     def do_GET(self):
@@ -512,6 +512,9 @@ class Handler(BaseHTTPRequestHandler):
                 "background_color": "#111111", "theme_color": "#111111",
                 "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
                           {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}],
+                # スマホの「共有」の送り先に出る。共有された URL を /share が autotube の「テレビに送る」に渡す
+                "share_target": {"action": "/share", "method": "GET",
+                                 "params": {"title": "title", "text": "text", "url": "url"}},
             }, ensure_ascii=False).encode(), "application/manifest+json")
         if path not in ("/", "/info"):
             return self._reply(404, b"not found")
@@ -546,6 +549,13 @@ class Handler(BaseHTTPRequestHandler):
                     mouse_click(data["click"])
                 for op in data.get("ops", []):  # 押す・離す・ダブルクリックなど。移動のあとに順に実行
                     mouse_op(op)
+            elif path == "/cast":  # 共有（/share）から：autotube の「テレビに送る」に渡す
+                import urllib.request
+                req = urllib.request.Request("http://127.0.0.1:8766/api/cast", method="POST",
+                                             data=json.dumps({"url": str(data.get("url", "")), "t": data.get("t", 0)}).encode(),
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    r.read()
             elif path == "/kbd":
                 if not ukbd:
                     return self._reply(500, "仮想キーボードが使えません（/dev/uinput の権限）".encode())

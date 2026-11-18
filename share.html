@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111111">
+<title>テレビに送る</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 24px 16px; background: #111; color: #eee; font: 16px/1.6 sans-serif; text-align: center; }
+  h1 { font-size: 20px; margin: 24px 0 8px; }
+  #url { color: #999; font-size: 13px; word-break: break-all; margin: 8px 0 20px; }
+  a { color: #8ab4ff; }
+</style>
+</head>
+<body>
+<h1 id="msg">📺 テレビに送っています…</h1>
+<div id="url"></div>
+<p><a id="back" href="/">リモコンに戻る</a></p>
+<script>
+// スマホの「共有」でリモコン（アプリ）を選んだときに開くページ（manifest の share_target）。
+// 共有された文字から URL を取り出して、phone-input（/cast）経由で autotube の「テレビに送る」に渡す。
+// 合言葉は、リモコンを開いたときに覚えたもの（localStorage）を使う
+const q = new URLSearchParams(location.search);
+const all = [q.get("url"), q.get("text"), q.get("title")].filter(Boolean).join(" ");
+const m = all.match(/https?:\/\/\S+/);
+let token = "";
+try { token = localStorage.getItem("token") || ""; } catch (e) {}
+if (token) document.getElementById("back").href = "/?t=" + encodeURIComponent(token);
+// 再生位置：YouTube の共有の「開始位置」は ?t=90 や &t=1m30s で付く
+function startSec(u) {
+  try {
+    const t = new URL(u).searchParams.get("t") || "";
+    const mm = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+    return mm ? (+mm[1] || 0) * 3600 + (+mm[2] || 0) * 60 + (+mm[3] || 0) : 0;
+  } catch (e) { return 0; }
+}
+(async () => {
+  const msg = document.getElementById("msg");
+  if (!m) { msg.textContent = "URL が見つかりませんでした"; document.getElementById("url").textContent = all; return; }
+  const url = m[0];
+  document.getElementById("url").textContent = url;
+  if (!token) { msg.textContent = "合言葉がありません。一度リモコンを開いてから、もう一度共有してください"; return; }
+  try {
+    const r = await fetch("/cast", { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
+      body: JSON.stringify({ url, t: startSec(url) }) });
+    if (!r.ok) throw new Error(await r.text());
+    msg.textContent = "📺 テレビに送りました";
+    setTimeout(() => { location.href = document.getElementById("back").href; }, 1500);
+  } catch (e) {
+    msg.textContent = "送れませんでした：" + e.message;
+  }
+})();
+</script>
+</body>
+</html>

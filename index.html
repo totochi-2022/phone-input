@@ -163,6 +163,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 </div><!-- /inputView -->
 <script>
   const token = new URLSearchParams(location.search).get("t") || "";
+  try { if (token) localStorage.setItem("token", token); } catch (e) {}  // 共有（/share）で使う
   // アプリ（ホーム画面に追加）として入れられるように：manifest は合言葉付きで読ませる（開くページにも合言葉が付く）。HTTPS のときだけ
   if (window.isSecureContext && token) {
     const m = document.createElement("link");
