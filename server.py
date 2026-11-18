@@ -549,6 +549,13 @@ class Handler(BaseHTTPRequestHandler):
                     mouse_click(data["click"])
                 for op in data.get("ops", []):  # 押す・離す・ダブルクリックなど。移動のあとに順に実行
                     mouse_op(op)
+            elif path == "/open":  # 共有（/share）から：テレビの Brave の新しいタブで開く（autotube の openurl）
+                import urllib.request
+                req = urllib.request.Request("http://127.0.0.1:8766/api/openurl", method="POST",
+                                             data=json.dumps({"url": str(data.get("url", "")), "how": "new"}).encode(),
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    r.read()
             elif path == "/cast":  # 共有（/share）から：autotube の「テレビに送る」に渡す
                 import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8766/api/cast", method="POST",

@@ -11,11 +11,18 @@
   h1 { font-size: 20px; margin: 24px 0 8px; }
   #url { color: #999; font-size: 13px; word-break: break-all; margin: 8px 0 20px; }
   a { color: #8ab4ff; }
+  .btns { display: grid; gap: 12px; max-width: 360px; margin: 0 auto 24px; }
+  .btns button { padding: 18px; font-size: 18px; border-radius: 12px; border: 1px solid #333; background: #222; color: #eee; }
+  .btns button:active { background: #2a5bd7; }
 </style>
 </head>
 <body>
-<h1 id="msg">📺 テレビに送っています…</h1>
+<h1 id="msg">テレビに送る</h1>
 <div id="url"></div>
+<div class="btns">
+  <button id="play">📺 テレビで再生</button>
+  <button id="open">🌐 テレビの Brave で開く</button>
+</div>
 <p><a id="back" href="/">リモコンに戻る</a></p>
 <script>
 // スマホの「共有」でリモコン（アプリ）を選んだときに開くページ（manifest の share_target）。
@@ -35,22 +42,27 @@ function startSec(u) {
     return mm ? (+mm[1] || 0) * 3600 + (+mm[2] || 0) * 60 + (+mm[3] || 0) : 0;
   } catch (e) { return 0; }
 }
-(async () => {
-  const msg = document.getElementById("msg");
-  if (!m) { msg.textContent = "URL が見つかりませんでした"; document.getElementById("url").textContent = all; return; }
-  const url = m[0];
-  document.getElementById("url").textContent = url;
-  if (!token) { msg.textContent = "合言葉がありません。一度リモコンを開いてから、もう一度共有してください"; return; }
+const msg = document.getElementById("msg");
+const url = m ? m[0] : "";
+document.getElementById("url").textContent = url || all;
+if (!m) { msg.textContent = "URL が見つかりませんでした"; document.querySelector(".btns").hidden = true; }
+else if (!token) { msg.textContent = "合言葉がありません。一度リモコンを開いてから、もう一度共有してください"; document.querySelector(".btns").hidden = true; }
+// 📺＝autotube の「テレビに送る」（mpv で再生、できなければ Brave）、🌐＝テレビの Brave の新しいタブで開く
+async function send(path, body, done) {
+  document.querySelector(".btns").hidden = true;
+  msg.textContent = "送っています…";
   try {
-    const r = await fetch("/cast", { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
-      body: JSON.stringify({ url, t: startSec(url) }) });
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error(await r.text());
-    msg.textContent = "📺 テレビに送りました";
+    msg.textContent = done;
     setTimeout(() => { location.href = document.getElementById("back").href; }, 1500);
   } catch (e) {
     msg.textContent = "送れませんでした：" + e.message;
+    document.querySelector(".btns").hidden = false;
   }
-})();
+}
+document.getElementById("play").onclick = () => send("/cast", { url, t: startSec(url) }, "📺 テレビに送りました");
+document.getElementById("open").onclick = () => send("/open", { url }, "🌐 テレビの Brave で開きました");
 </script>
 </body>
 </html>
