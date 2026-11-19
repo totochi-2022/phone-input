@@ -74,6 +74,8 @@
   #chat .busy { align-self: flex-start; color: #aaa; font-size: 12px; }
   #clStatus { display: flex; flex-wrap: wrap; gap: 2px 12px; }
   #clPrompt:empty { display: none; }
+  .sug[hidden] { display: none; }
+  .sug { text-align: left; padding: 8px 10px; font-size: 14px; background: #1f2b3a; color: #cde; border: 1px dashed #5a7aa0; }
   #clPrompt { border: 2px solid #f0c040; border-radius: 10px; padding: 6px 8px; background: #2a2614; }
   #clPrompt pre { margin: 0 0 6px; font-size: 11px; line-height: 1.35; white-space: pre-wrap; word-break: break-all;
                   max-height: 28vh; overflow: auto; color: #eee; }
@@ -132,6 +134,7 @@
 <div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe></div>
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
+  <button id="clSuggest" class="sug" hidden></button>
   <div class="opts tnote">
     <label><input type="checkbox" id="voSpeak"> ずんだもんが読む</label>
     <label><input type="radio" name="voOut" value="phone"> スマホ</label><label><input type="radio" name="voOut" value="tv"> テレビ</label>
@@ -393,6 +396,10 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     }).join("");
     if ($("clStatus").innerHTML !== stHtml) $("clStatus").innerHTML = stHtml;
     showPrompt(h.prompt);
+    // おすすめ（入力欄の薄い字）：そのままでよければ押すだけで送る（🎤 の印は付けない）
+    const sg = $("clSuggest");
+    if (h.suggest) { sg.textContent = "💡 " + h.suggest; sg.dataset.text = h.suggest; sg.hidden = false; sg.disabled = false; }
+    else sg.hidden = true;
     const sig = h.items.length + ":" + (h.items.length ? h.items[h.items.length - 1].t : "") + ":" + h.working;
     if (sig === chatSig) return;
     chatSig = sig;
@@ -438,6 +445,16 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     esc.onclick = () => send({ esc: true }, esc); ans.appendChild(esc);
     if (navigator.vibrate) navigator.vibrate(200);
   }
+
+  $("clSuggest").onclick = async () => {
+    const text = $("clSuggest").dataset.text; if (!text) return;
+    $("clSuggest").disabled = true;
+    try {
+      const r = await postJson("/claude", { text, plain: true, jump: $("voJump").checked });
+      $("voText").textContent = "送りました：" + text;
+      if ($("voSpeak").checked) waitReply(r.since);
+    } catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
+  };
 
   // 会話をクリア：今の時点をサーバーに覚えてもらい、次からはそれより後のやり取りだけ出す
   $("chatClear").onclick = async () => {

@@ -654,6 +654,34 @@ def claude_prompt():
     return {"screen": screen, "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
 
 
+def claude_suggestion():
+    """入力欄に薄い字で出ているおすすめ（次に頼む文の候補）。自分で打ちかけの文（普通の色）や、無ければ None。
+    入力欄＝横線にはさまれた「❯ 」の行。おすすめは灰色（38;5;24x）か薄い（2m）の字で出る"""
+    import re
+    pane = claude_pane()
+    if not pane:
+        return None
+    try:
+        raw = subprocess.run(["tmux", "capture-pane", "-p", "-e", "-t", pane], capture_output=True, text=True,
+                             timeout=3).stdout.split("\n")
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    plain = [re.sub(r"\x1b\[[0-9;]*m", "", ln) for ln in raw]
+    for i in range(len(plain) - 1, 0, -1):
+        if plain[i].lstrip().startswith("❯") and set(plain[i - 1].strip()) <= set("─") and plain[i - 1].strip():
+            text = plain[i].lstrip()[1:].strip()
+            if not text:
+                return None
+            after = raw[i].split("❯", 1)[1]
+            # 文字の前の最後の色の指定が灰色か薄いならおすすめ
+            m = re.match(r"^((?:\x1b\[[0-9;]*m|\s)*)", after)
+            codes = m.group(1) if m else ""
+            if re.search(r"\x1b\[(2|38;5;24\d|90)m", codes) or "\x1b[2;" in codes:
+                return text
+            return None
+    return None
+
+
 def speakable(md):
     """Markdown を読み上げ向けに：コード・URL・表の区切り・記号を省く"""
     import re
@@ -798,7 +826,8 @@ class Handler(BaseHTTPRequestHandler):
                 text = " ".join(str(data.get("text", "")).split())  # 改行は空白に（途中で送信されないように）
                 if not text:
                     return self._reply(400, b"empty")
-                text = "🎤 " + text  # 音声入力の印（Claude が聞き間違いを音の似た言葉として読み替えられるように）
+                if not data.get("plain"):  # plain＝おすすめをそのまま送るとき（音声ではないので印を付けない）
+                    text = "🎤 " + text  # 音声入力の印（Claude が聞き間違いを音の似た言葉として読み替えられるように）
                 sock = claude_sock()
                 if not sock:
                     return self._reply(500, "常駐の Claude が見つかりません".encode())
@@ -829,6 +858,7 @@ class Handler(BaseHTTPRequestHandler):
                 h = claude_history(int(data.get("n", 30)))
                 h["status"] = claude_status()
                 h["prompt"] = claude_prompt()
+                h["suggest"] = None if h["prompt"] or h["working"] else claude_suggestion()
                 return self._reply(200, json.dumps(h, ensure_ascii=False).encode(), "application/json")
             elif path == "/answer":  # 端末に出ている確認（許可・質問）に答える。n＝選択肢の番号、esc＝断る
                 # 送る直前に画面を見直し、リモコンに見せた選択肢がまだ出ているときだけ送る（キーは番号か Esc だけ）
