@@ -506,6 +506,9 @@ def claude_reply(since):
     return None
 
 
+CHAT_CUTOFF = Path.home() / ".local/state/phone-input/chat-cutoff"  # 「会話をクリア」した時刻（ISO）。これより後だけ出す
+
+
 def claude_history(n=30):
     """会話の最近のやり取り [{who: "user"|"claude", text, final, t}]（新しいものが最後）。working＝Claude が作業中か"""
     files = sorted(CLAUDE_PROJ.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
@@ -516,6 +519,10 @@ def claude_history(n=30):
         fh.seek(max(0, f.stat().st_size - 4_000_000))
         lines = fh.read().splitlines()
     items, working = [], False
+    try:
+        cutoff = CHAT_CUTOFF.read_text().strip()
+    except OSError:
+        cutoff = ""
     for line in lines:
         try:
             d = json.loads(line)
@@ -525,6 +532,8 @@ def claude_history(n=30):
             continue
         m = d.get("message") or {}
         c = m.get("content")
+        if cutoff and (d.get("timestamp") or "") <= cutoff:
+            continue
         if d.get("type") == "user":
             if isinstance(c, str):
                 text = c
@@ -718,7 +727,11 @@ class Handler(BaseHTTPRequestHandler):
                 say_stop()
                 if parts:
                     threading.Thread(target=say_tv, args=(parts,), daemon=True).start()
-            elif path == "/history":  # 会話の最近のやり取り（🧪 の下に出す）
+            elif path == "/history":  # 会話の最近のやり取り（🤖 の下に出す）。clear なら今の時刻を覚えて、次からそれより後だけ
+                if data.get("clear"):
+                    from datetime import datetime, timezone
+                    CHAT_CUTOFF.parent.mkdir(parents=True, exist_ok=True)
+                    CHAT_CUTOFF.write_text(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
                 return self._reply(200, json.dumps(claude_history(int(data.get("n", 30))), ensure_ascii=False).encode(),
                                    "application/json")
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に

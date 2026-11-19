@@ -108,19 +108,16 @@
   <button data-mode="input">⌨ 入力</button>
   <button data-mode="at">▶ autotube</button>
   <button data-mode="bm" title="テレビの Brave のブックマークを開く（autotube の /bookmarks）">🔖 ブックマーク</button>
-  <button data-mode="test" title="試し：音声でテレビに打つ・Claude に頼む">🧪</button>
+  <button data-mode="test" title="Claude：音声で常駐の Claude に頼む・返事を見る・読む">🤖</button>
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="atView"><iframe id="atFrame" title="autotube"></iframe></div>
 <div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe></div>
 <div id="testView">
-  <p class="tnote">試しの画面：押して話すと、終わったところで送ります</p>
-  <button id="voTv" class="vo">🎤 テレビに打つ</button>
-  <label class="tnote"><input type="checkbox" id="voEnter"> 打ったあと Enter も押す</label>
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
   <label class="tnote"><input type="checkbox" id="voJump"> 送ったらテレビを端末に切り替える</label>
   <label class="tnote"><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む　<label><input type="radio" name="voOut" value="phone"> スマホ</label> <label><input type="radio" name="voOut" value="tv"> テレビ</label></label>
-  <div class="vorow"><button id="voLast">🔁 最後の返事を読む</button><button id="voStop">⏹ 止める</button></div>
+  <div class="vorow"><button id="voLast">🔁 最後の返事を読む</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 会話をクリア</button></div>
   <div id="voText"></div>
   <div id="voReply" class="tnote"></div>
   <div id="chat"></div>
@@ -289,7 +286,6 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       },
     });
   }
-  $("voTv").onclick = () => voListen($("voTv"), (text) => post("/type", { text, enter: $("voEnter").checked }));
   async function askClaude(text) {
     const r = await postJson("/claude", { text, jump: $("voJump").checked });
     if ($("voSpeak").checked) waitReply(r.since);
@@ -342,7 +338,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   }
   const voOut = () => (document.querySelector('input[name="voOut"]:checked') || {}).value || "phone";
   async function speak(text, gen = ++voGen) {
-    $("voReply").textContent = text;
+    $("voReply").textContent = "";  // 返事の文は下の会話に出ている
     const parts = chunks(text);
     if (voOut() === "tv") { await postJson("/say", { parts }).catch((e) => { $("voReply").textContent = e.message; }); return; }
     let next = parts.length ? tts(parts[0]) : null;
@@ -376,6 +372,11 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (h.working) { const b = document.createElement("div"); b.className = "busy"; b.textContent = "Claude が作業中…"; box.appendChild(b); }
     if (atBottom) scrollTo(0, document.body.scrollHeight);
   }
+  // 会話をクリア：今の時点をサーバーに覚えてもらい、次からはそれより後のやり取りだけ出す
+  $("chatClear").onclick = async () => {
+    if (!confirm("ここまでの会話を表示から消しますか？（会話そのものは消えません）")) return;
+    try { await postJson("/history", { clear: true }); chatSig = ""; chatRefresh(); } catch (e) { $("voText").textContent = e.message; }
+  };
   setInterval(chatRefresh, 3000);
   document.addEventListener("visibilitychange", chatRefresh);
 
