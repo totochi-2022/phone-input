@@ -22,8 +22,6 @@
   .grid.hint button { padding: 12px 0; font-size: 19px; }
   h2 { font-size: 14px; color: #999; margin: 14px 0 0; font-weight: normal; }
   .grid small { display: block; font-size: 11px; color: #aaa; }
-  #direct { width: 100%; box-sizing: border-box; margin-top: 6px; font-size: 20px; padding: 10px;
-            background: #1d2a1d; color: #eee; border: 1px solid #4a4; border-radius: 8px; }
   .padwrap { display: flex; gap: 8px; margin-top: 8px; height: 34vh; }
   #pad { flex: 1; background: #1c1f26; border: 1px solid #446; border-radius: 10px; touch-action: none; }
   #wheel { width: 56px; background: #262033; border: 1px solid #546; border-radius: 10px; touch-action: none;
@@ -78,13 +76,9 @@
   .line #send { flex: 0 0 auto; padding: 10px 16px; }
   .line .mic { flex: 0 0 auto; padding: 10px 14px; font-size: 20px; }
   .line .mic.rec { background: #c0392b; color: #fff; }
-  #direct { margin-top: 0 !important; }
   .row label { white-space: normal; }
-  .ktabs { display: flex; gap: 6px; margin-top: 8px; }
-  .ktabs button { padding: 9px 2px; font-size: 14px; }
-  .ktabs button.on { background: #2a5bd7; font-weight: bold; }
   .kpanel { display: none; }
-  body.k-ja #pJa, body.k-en #pEn { display: block; }
+  body.k-ja #pJa { display: block; }
   .padwrap { height: 25.2vh; }
   body.k-none .padwrap { height: 34.2vh; }
   .pckb { margin-top: 10px !important; }
@@ -132,14 +126,8 @@
   <button id="send">送信</button>
 </div>
 </div>
-<div class="kpanel" id="pEn">
-<input id="direct" type="password" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="英字キーボードで打つとすぐ送信">
-</div>
 <div id="status"></div>
-<div class="ktabs">
-  <button data-kmode="ja">🎤 日本語</button>
-  <button data-kmode="en">⌨ 英語</button>
-</div>
+
 
 <div class="padwrap">
   <div id="pad"></div>
@@ -407,24 +395,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   };
   $("qr").onclick = () => $("qr").classList.remove("on");
 
-  // 入力の 3 モード：日本語（音声入力）・英語（直打ち）・PC キーボード
-  function setKmode(m) {
-    for (const k of ["ja", "en", "none"]) document.body.classList.toggle("k-" + k, k === m);
-    document.querySelectorAll("[data-kmode]").forEach((b) => b.classList.toggle("on", b.dataset.kmode === m));
-    try { localStorage.setItem("kmode", m); } catch (e) {}
-  }
-  document.querySelectorAll("[data-kmode]").forEach((b) => {
-    b.onclick = () => {  // 開いているタブをもう一度押すと閉じる（タッチパッドを広く使える）
-      const m = document.body.classList.contains("k-" + b.dataset.kmode) ? "none" : b.dataset.kmode;
-      setKmode(m);
-      if (m === "en") $("direct").focus();
-      if (m === "ja") $("text").focus();  // すぐキーボードが出て、音声入力ボタンを押せる
-    };
-  });
-  let savedK = "ja";
-  try { savedK = localStorage.getItem("kmode") || "ja"; } catch (e) {}
-  if (!["ja", "en", "none"].includes(savedK)) savedK = "ja";
-  setKmode(savedK);
+  // 入力の欄は日本語（🎤・音声入力）だけ。1 文字ずつ打つのは下の PC キーボードで（英語の直打ちの欄は 2026-11-19 に外した）
+  document.body.classList.add("k-ja");
 
   let statusTimer = null;
   function status(msg, err) {
@@ -479,28 +451,9 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     autoArm();
   });
 
-  // 直打ち：欄の中身の変化（追加・削除）をそのままキー入力として送る
-  const direct = $("direct");
-  let last = "", composing = false, chain = Promise.resolve();
+  // キー入力を順番に送る（PC キーボードで使う）
+  let chain = Promise.resolve();
   const enqueue = (fn) => { chain = chain.then(fn).catch((e) => status("失敗: " + e.message, true)); };
-  const sendKey = (key) => enqueue(() => post("/key", { key }));
-  const sendText = (text) => enqueue(() => post("/type", { text }));
-  function resetIfLong() { if (!composing && direct.value.length > 30) { direct.value = ""; last = ""; } }
-  direct.addEventListener("compositionstart", () => { composing = true; });
-  direct.addEventListener("compositionend", () => { composing = false; resetIfLong(); });
-  direct.addEventListener("input", () => {
-    const v = direct.value;
-    let i = 0;
-    while (i < last.length && i < v.length && last[i] === v[i]) i++;
-    for (let n = last.length - i; n > 0; n--) sendKey("BackSpace");
-    if (v.length > i) sendText(v.slice(i));
-    last = v;
-    resetIfLong();
-  });
-  direct.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); sendKey("Enter"); }
-    else if ((e.key === "Backspace" || e.keyCode === 8) && direct.value === "") { e.preventDefault(); sendKey("BackSpace"); }
-  });
 
   // タッチパッド：動きとボタン操作をためて 40ms ごとにまとめて送る（送信中は次を待つ）。
   // 移動とボタンを同じ道で送るので順番が入れ替わらない（サーバーは移動 → ボタンの順に実行）
