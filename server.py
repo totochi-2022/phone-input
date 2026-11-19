@@ -791,7 +791,8 @@ def claude_suggestion():
     for i in range(len(plain) - 1, 0, -1):
         if plain[i].lstrip().startswith("❯") and set(plain[i - 1].strip()) <= set("─") and plain[i - 1].strip():
             text = plain[i].lstrip()[1:].strip()
-            if not text:
+            # 操作の案内（待ちの列があるとき・空のとき）はおすすめではない
+            if not text or re.match(r"(Press |Try |ctrl\+|esc |\? for)", text, re.I):
                 return None
             after = raw[i].split("❯", 1)[1]
             # 文字の前の最後の色の指定が灰色か薄いならおすすめ
