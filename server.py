@@ -532,8 +532,7 @@ def claude_history(n=30):
             continue
         m = d.get("message") or {}
         c = m.get("content")
-        if cutoff and (d.get("timestamp") or "") <= cutoff:
-            continue
+        hidden = bool(cutoff) and (d.get("timestamp") or "") <= cutoff  # クリアより前：出さないが、作業中かどうかには数える
         if d.get("type") == "user":
             if isinstance(c, str):
                 text = c
@@ -546,14 +545,15 @@ def claude_history(n=30):
             text = text.strip()
             if not text or text.startswith("<"):
                 continue  # コマンドや仕組みの通知
-            items.append({"who": "user", "text": text[:2000], "t": d.get("timestamp")})
             working = True
+            if not hidden:
+                items.append({"who": "user", "text": text[:2000], "t": d.get("timestamp")})
         elif d.get("type") == "assistant" and isinstance(c, list):
             text = "".join(x.get("text", "") for x in c if x.get("type") == "text").strip()
             final = m.get("stop_reason") == "end_turn"
             if final:
                 working = False
-            if text:
+            if text and not hidden:
                 items.append({"who": "claude", "text": text[:6000], "final": final, "t": d.get("timestamp")})
     return {"items": items[-n:], "working": working}
 

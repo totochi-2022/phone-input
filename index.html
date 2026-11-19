@@ -52,13 +52,21 @@
   body.bm #bmView { display: block; }
   #testView { display: none; }
   body.test #inputView { display: none; }
-  body.test #testView { display: grid; gap: 14px; }
+  /* Claude のページ：上の操作は固定、下の会話だけスクロール（top はモードの段の高さを JS で入れる） */
+  body.test #testView { display: flex; flex-direction: column; gap: 6px; position: fixed; left: 0; right: 0; bottom: 0;
+                        padding: 6px 10px 8px; box-sizing: border-box; }
+  #testView > * { flex: 0 0 auto; }
+  #testView > #chat { flex: 1 1 auto; }
+  #testView .opts { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+  #testView .opts label { white-space: nowrap; }
   .modebar [data-mode="test"] { flex: 0 0 auto; padding: 9px 12px; }
-  .vo { padding: 28px 8px; font-size: 22px; border-radius: 14px; }
+  .vo { padding: 14px 8px; font-size: 19px; border-radius: 12px; }
   .vo.rec { background: #c0392b; color: #fff; }
-  .vorow { display: flex; gap: 8px; } .vorow button { flex: 1; padding: 12px 6px; }
-  #voReply { white-space: pre-wrap; max-height: 40vh; overflow: auto; }
-  #chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 20px; }
+  .vorow { display: flex; gap: 6px; } .vorow button { flex: 1; padding: 8px 4px; font-size: 14px; }
+  #voText, #voReply { font-size: 13px; color: #bbb; white-space: pre-wrap; max-height: 3.2em; overflow: hidden; }
+  #voText:empty, #voReply:empty { display: none; }
+  #chat { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 0 12px;
+          border-top: 1px solid #333; }
   #chat .m { white-space: pre-wrap; word-break: break-word; padding: 8px 10px; border-radius: 10px; font-size: 14px; line-height: 1.45; max-width: 92%; }
   #chat .u { align-self: flex-end; background: #2a5bd7; color: #fff; }
   #chat .c { align-self: flex-start; background: #262a33; color: #eee; }
@@ -115,9 +123,12 @@
 <div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe></div>
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
-  <label class="tnote"><input type="checkbox" id="voJump"> 送ったらテレビを端末に切り替える</label>
-  <label class="tnote"><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む　<label><input type="radio" name="voOut" value="phone"> スマホ</label> <label><input type="radio" name="voOut" value="tv"> テレビ</label></label>
-  <div class="vorow"><button id="voLast">🔁 最後の返事を読む</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 会話をクリア</button></div>
+  <div class="opts tnote">
+    <label><input type="checkbox" id="voSpeak"> ずんだもんが読む</label>
+    <label><input type="radio" name="voOut" value="phone"> スマホ</label><label><input type="radio" name="voOut" value="tv"> テレビ</label>
+    <label><input type="checkbox" id="voJump"> 端末へ切替</label>
+  </div>
+  <div class="vorow"><button id="voLast">🔁 最後の返事</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 クリア</button></div>
   <div id="voText"></div>
   <div id="voReply" class="tnote"></div>
   <div id="chat"></div>
@@ -217,7 +228,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
-    if (mode === "test") { chatSig = ""; setTimeout(chatRefresh, 0); }
+    if (mode === "test") { $("testView").style.top = $("modebar").offsetHeight + "px"; chatSig = ""; setTimeout(chatRefresh, 0); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {
       $("atView").style.top = $("modebar").offsetHeight + "px";
@@ -361,7 +372,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (sig === chatSig) return;
     chatSig = sig;
     const box = $("chat");
-    const atBottom = innerHeight + scrollY >= document.body.scrollHeight - 80;
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 80;
     box.textContent = "";
     for (const it of h.items) {
       const d = document.createElement("div");
@@ -370,7 +381,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       box.appendChild(d);
     }
     if (h.working) { const b = document.createElement("div"); b.className = "busy"; b.textContent = "Claude が作業中…"; box.appendChild(b); }
-    if (atBottom) scrollTo(0, document.body.scrollHeight);
+    if (atBottom) box.scrollTop = box.scrollHeight;
   }
   // 会話をクリア：今の時点をサーバーに覚えてもらい、次からはそれより後のやり取りだけ出す
   $("chatClear").onclick = async () => {
