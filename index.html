@@ -447,16 +447,20 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   function fitText() { const t = $("text"); t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; }
   $("text").addEventListener("input", fitText);
   $("text").addEventListener("compositionstart", () => { taComposing = true; });
-  $("text").addEventListener("compositionend", () => { taComposing = false; });
-  $("text").addEventListener("input", (e) => {
-    if (!$("auto").checked) return;
-    if (e.inputType === "insertFromPaste" || (e.data && e.data.length > 1)) bulk = true;
+  // Gboard のマイクは話している間「変換中」のまま文字を入れる。1 秒たっても変換中なら、変換が終わったときにもう一度待つ
+  function autoArm() {
     clearTimeout(autoTimer);
     if (bulk) autoTimer = setTimeout(() => {
       if (taComposing) return;
       bulk = false;
       if ($("text").value.trim()) $("send").click();
     }, 1000);
+  }
+  $("text").addEventListener("compositionend", () => { taComposing = false; if ($("auto").checked) autoArm(); });
+  $("text").addEventListener("input", (e) => {
+    if (!$("auto").checked) return;
+    if (e.inputType === "insertFromPaste" || (e.data && e.data.length > 1)) bulk = true;
+    autoArm();
   });
 
   // 直打ち：欄の中身の変化（追加・削除）をそのままキー入力として送る
