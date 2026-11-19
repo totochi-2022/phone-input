@@ -63,7 +63,8 @@
   .vo { padding: 14px 8px; font-size: 19px; border-radius: 12px; }
   .vo.rec { background: #c0392b; color: #fff; }
   .vorow { display: flex; gap: 6px; } .vorow button { flex: 1; padding: 8px 4px; font-size: 14px; }
-  #voText, #voReply { font-size: 13px; color: #bbb; white-space: pre-wrap; max-height: 3.2em; overflow: hidden; }
+  #voText { font-size: 14px; color: #ddd; white-space: pre-wrap; max-height: 30vh; overflow-y: auto; }
+  #voReply { font-size: 13px; color: #bbb; white-space: pre-wrap; max-height: 3.2em; overflow: hidden; }
   #voText:empty, #voReply:empty { display: none; }
   #chat { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 0 12px;
           border-top: 1px solid #333; }
@@ -101,7 +102,7 @@
   .line { display: flex; gap: 6px; }
   .line { align-items: flex-end; }
   #text { flex: 1; min-width: 0; font-size: 18px; padding: 10px; box-sizing: border-box; height: auto;
-          resize: none; line-height: 1.3; max-height: calc(4 * 1.3em + 20px); overflow-y: auto;
+          resize: none; line-height: 1.3; max-height: calc(8 * 1.3em + 20px); overflow-y: auto;
           background: #222; color: #eee; border: 1px solid #444; border-radius: 8px; }
   .line #send { flex: 0 0 auto; padding: 10px 16px; }
   .line .mic { flex: 0 0 auto; padding: 10px 14px; font-size: 20px; }
@@ -311,7 +312,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (voRec) { voRec.stop(); return; }  // 話している途中でもう一度押したら、そこで終わる
     btn.classList.add("rec"); $("voText").textContent = "聞いています…";
     voRec = listenLong({
-      onText: (t) => { $("voText").textContent = t; },
+      onText: (t) => { const v = $("voText"); v.textContent = t; v.scrollTop = v.scrollHeight; },  // 長くなったら最新の所を見せる
       onError: (err) => { $("voText").textContent = "聞き取れませんでした（" + err + "）"; },
       onDone: async (text) => {
         btn.classList.remove("rec"); voRec = null;
@@ -584,7 +585,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   $("text").addEventListener("keydown", (e) => {
     if ((e.key === "Enter" || e.keyCode === 13) && !e.isComposing && !taComposing) { e.preventDefault(); $("send").click(); }
   });
-  // 文字が増えたら下に広がる（最大 4 行）。送信して空になれば 1 行に戻る
+  // 文字が増えたら下に広がる（最大 8 行）。送信して空になれば 1 行に戻る
   function fitText() { const t = $("text"); t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; }
   $("text").addEventListener("input", fitText);
   $("text").addEventListener("compositionstart", () => { taComposing = true; });
