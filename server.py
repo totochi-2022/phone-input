@@ -509,16 +509,46 @@ def claude_reply(since):
 CHAT_CUTOFF = Path.home() / ".local/state/phone-input/chat-cutoff"  # 「会話をクリア」した時刻（ISO）。これより後だけ出す
 
 
+def _clip(t, head=700, tail=300):
+    """長い出力は先頭と最後だけ"""
+    t = str(t or "")
+    return t if len(t) <= head + tail + 20 else t[:head] + f"\n…（{len(t) - head - tail} 文字省略）…\n" + t[-tail:]
+
+
+def _result_text(c):
+    if isinstance(c, list):
+        return "\n".join(x.get("text", "") for x in c if isinstance(x, dict) and x.get("type") == "text") or \
+            ("（画像）" if any(isinstance(x, dict) and x.get("type") == "image" for x in c) else "")
+    return str(c or "")
+
+
+def _tool_desc(name, inp):
+    """道具の一言の説明と中身（コマンド・ファイル名など）"""
+    inp = inp or {}
+    desc = inp.get("description") or ""
+    body = inp.get("command") or inp.get("file_path") or inp.get("pattern") or inp.get("url") or inp.get("query") or \
+        inp.get("prompt") or inp.get("skill") or ""
+    if not desc:
+        desc = {"Read": "ファイルを読む", "Write": "ファイルを書く", "Edit": "ファイルを直す", "Grep": "探す",
+                "Glob": "ファイルを探す", "WebSearch": "ネットで調べる", "WebFetch": "ページを読む",
+                "Agent": "別の Claude に頼む", "ToolSearch": "道具を探す", "Skill": "スキル"}.get(name, name)
+    return desc, str(body)
+
+
 def claude_history(n=30):
-    """会話の最近のやり取り [{who: "user"|"claude", text, final, t}]（新しいものが最後）。working＝Claude が作業中か"""
+    """会話の最近のやり取り。items：[{who: "user"|"claude"|"tools", text, final, t, tools}]（新しいものが最後）。
+    tools は返事と返事の間に使った道具（名前・説明・中身・出力・裏の作業の番号）。
+    tasks は裏の作業（始めたときの結果「running in background with ID」と、終わりの知らせ queue-operation の task-notification から組み立てる）。
+    working＝Claude が作業中か"""
+    import re
     files = sorted(CLAUDE_PROJ.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
     if not files:
-        return {"items": [], "working": False}
+        return {"items": [], "working": False, "tasks": []}
     f = files[-1]
     with open(f, "rb") as fh:
         fh.seek(max(0, f.stat().st_size - 4_000_000))
         lines = fh.read().splitlines()
-    items, working = [], False
+    items, working, tools_by_id, tasks = [], False, {}, {}
     try:
         cutoff = CHAT_CUTOFF.read_text().strip()
     except OSError:
@@ -528,17 +558,40 @@ def claude_history(n=30):
             d = json.loads(line)
         except ValueError:
             continue
+        if d.get("type") == "queue-operation" and "<task-notification>" in str(d.get("content", "")):
+            c = str(d["content"])
+            tid = re.search(r"<task-id>([^<]+)</task-id>", c)
+            if tid:
+                st = re.search(r"<status>([^<]+)</status>", c)
+                sm = re.search(r"<summary>(.*?)</summary>", c, re.S)
+                tk = tasks.setdefault(tid[1], {"id": tid[1]})
+                tk.update(status=st[1] if st else "done", summary=(sm[1].strip() if sm else "")[:200], end=d.get("timestamp"))
+            continue
         if d.get("isSidechain") or d.get("isMeta") or d.get("isCompactSummary"):
             continue
         m = d.get("message") or {}
         c = m.get("content")
         hidden = bool(cutoff) and (d.get("timestamp") or "") <= cutoff  # クリアより前：出さないが、作業中かどうかには数える
         if d.get("type") == "user":
+            if isinstance(c, list) and any(x.get("type") == "tool_result" for x in c):
+                for x in c:  # 道具の結果：その道具に出力を付ける。裏の作業なら番号を覚える
+                    if x.get("type") != "tool_result":
+                        continue
+                    out = _result_text(x.get("content"))
+                    t = tools_by_id.get(x.get("tool_use_id"))
+                    if t is not None:
+                        t["out"] = _clip(out)
+                        t["err"] = bool(x.get("is_error"))
+                    # 裏で動かした道具（run_in_background）の結果の先頭だけを見る（出力の中の同じ文字には反応しない）
+                    bg = re.match(r"\s*Command running in background with ID: (\w+)", out) if t and t.get("bgreq") else None
+                    if bg and t is not None:
+                        t["bg"] = bg[1]
+                        tasks.setdefault(bg[1], {"id": bg[1]}).update(desc=t["desc"], start=d.get("timestamp"),
+                                                                       status=tasks.get(bg[1], {}).get("status", "running"))
+                continue
             if isinstance(c, str):
                 text = c
             elif isinstance(c, list):
-                if any(x.get("type") == "tool_result" for x in c):
-                    continue  # ツールの結果（作業の途中）
                 text = "".join(x.get("text", "") for x in c if x.get("type") == "text")
             else:
                 continue
@@ -555,7 +608,23 @@ def claude_history(n=30):
                 working = False
             if text and not hidden:
                 items.append({"who": "claude", "text": text[:6000], "final": final, "t": d.get("timestamp")})
-    return {"items": items[-n:], "working": working}
+            for x in c:
+                if x.get("type") != "tool_use":
+                    continue
+                desc, body = _tool_desc(x.get("name"), x.get("input"))
+                t = {"id": x.get("id"), "name": x.get("name"), "desc": desc[:200], "body": _clip(body, 1500, 200), "out": None,
+                     "bgreq": bool((x.get("input") or {}).get("run_in_background"))}
+                tools_by_id[x.get("id")] = t
+                if hidden:
+                    continue
+                if items and items[-1]["who"] == "tools":
+                    items[-1]["tools"].append(t)
+                else:
+                    items.append({"who": "tools", "tools": [t], "t": d.get("timestamp")})
+    tl = sorted(tasks.values(), key=lambda k: k.get("start") or k.get("end") or "")
+    tl = [k for k in tl if k.get("start")]  # 始めたところが見えている作業だけ
+    running = [k for k in tl if k.get("status") == "running"]
+    return {"items": items[-n:], "working": working, "tasks": running + [k for k in tl if k.get("status") != "running"][-10:][::-1]}
 
 
 GLYPH_JA = {"⏳": "作業中", "🔒": "許可待ち", "⌨": "入力待ち", "❓": "質問あり", "🔔": "終わった", "💤": "待機", "🌙": "裏で動作"}

@@ -74,6 +74,17 @@
   #chat .c.mid { opacity: .6; font-size: 12px; }
   #chat .busy { align-self: flex-start; color: #aaa; font-size: 12px; }
   #clStatus { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  #clStatus .tk { color: #8cf; cursor: pointer; }
+  #clTasks { background: #1a1f28; border-radius: 8px; padding: 6px 8px; max-height: 25vh; overflow: auto; font-size: 12px; line-height: 1.6; }
+  #clTasks[hidden] { display: none; }
+  #chat details.tools { align-self: flex-start; max-width: 92%; font-size: 12px; color: #9ab; }
+  #chat details.tools summary { cursor: pointer; padding: 2px 4px; }
+  #chat .tool { margin: 4px 0 8px 10px; border-left: 2px solid #345; padding-left: 8px; }
+  #chat .tool.err { border-left-color: #a44; }
+  #chat .tool .th { color: #cde; }
+  #chat .tool pre { white-space: pre-wrap; word-break: break-all; margin: 3px 0; padding: 4px 6px; border-radius: 4px; font-size: 11px; max-height: 30vh; overflow: auto; }
+  #chat .tool pre.tb { background: #10151c; color: #e6c07b; }
+  #chat .tool pre.to { background: #0c0f14; color: #bbb; }
   #clPrompt:empty { display: none; }
   .sug[hidden] { display: none; }
   .phrow { display: flex; gap: 6px; align-items: center; }
@@ -162,6 +173,7 @@
   </div>
   <div class="vorow"><button id="voLast">🔁 最後の返事</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 クリア</button></div>
   <div id="clStatus" class="tnote"></div>
+  <div id="clTasks" class="tnote" hidden></div>
   <div id="clPrompt"></div>
   <div id="voText"></div>
   <div id="voReply" class="tnote"></div>
@@ -477,19 +489,28 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       const name = r.me ? "<b>この Claude</b>" : r.disp.replace(/^~\/work\//, "");
       return `<span class="${cls}">${name} ${r.mark}${r.label}</span>`;
     }).join("");
-    if ($("clStatus").innerHTML !== stHtml) $("clStatus").innerHTML = stHtml;
+    // 裏の作業：実行中の数を状態の行に。押すと一覧（説明・経過時間・終わったものの結果）
+    const tasks = h.tasks || [], run = tasks.filter((k) => k.status === "running");
+    const tkHtml = tasks.length ? `<span class="tk" id="tkBtn">${run.length ? `⏳ 実行中 ${run.length}` : "✓ 裏の作業"} ›</span>` : "";
+    if ($("clStatus").innerHTML !== stHtml + tkHtml) {
+      $("clStatus").innerHTML = stHtml + tkHtml;
+      if ($("tkBtn")) $("tkBtn").onclick = () => { tkOpen = !tkOpen; renderTasks(); };
+    }
+    lastTasks = tasks; renderTasks();
     showPrompt(h.prompt);
     // おすすめ（入力欄の薄い字）：そのままでよければ押すだけで送る（🎤 の印は付けない）
     const sg = $("clSuggest");
     if (h.suggest) { sg.textContent = "💡 " + h.suggest; sg.dataset.text = h.suggest; sg.hidden = false; sg.disabled = false; }
     else sg.hidden = true;
-    const sig = h.items.length + ":" + (h.items.length ? h.items[h.items.length - 1].t : "") + ":" + h.working;
+    const toolsN = h.items.reduce((a, it) => a + (it.tools ? it.tools.filter((t) => t.out !== null).length * 1000 + it.tools.length : 0), 0);
+    const sig = h.items.length + ":" + (h.items.length ? h.items[h.items.length - 1].t : "") + ":" + h.working + ":" + toolsN;
     if (sig === chatSig) return;
     chatSig = sig;
     const box = $("chat");
     const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 80;
     box.textContent = "";
     for (const it of h.items) {
+      if (it.who === "tools") { box.appendChild(toolsEl(it.tools)); continue; }
       const d = document.createElement("div");
       d.className = "m " + (it.who === "user" ? "u" : "c" + (it.final ? "" : " mid"));
       d.textContent = it.text;
@@ -498,6 +519,44 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (h.working) { const b = document.createElement("div"); b.className = "busy"; b.textContent = "Claude が作業中…"; box.appendChild(b); }
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
+  // 道具の使用（Claude Code のアプリのまね）：「🔧 3 件のコマンドを実行しました ›」の 1 行。押すと 1 件ずつ説明・中身・出力
+  const toolsOpen = new Set();  // 開いているまとまり（最初の道具の id）。3 秒ごとに作り直しても開いたままに
+  function toolsEl(tools) {
+    const key = tools[0].id, det = document.createElement("details");
+    det.className = "tools"; det.open = toolsOpen.has(key);
+    det.ontoggle = () => { det.open ? toolsOpen.add(key) : toolsOpen.delete(key); };
+    const nb = tools.filter((t) => t.name === "Bash").length, running = tools.some((t) => t.out === null);
+    const what = nb === tools.length ? "コマンドを実行しました" : nb ? "コマンドなどを使いました" : "操作をしました";
+    const sm = document.createElement("summary");
+    sm.textContent = `🔧 ${tools.length} 件の${what}${running ? "（実行中）" : ""}`;
+    det.appendChild(sm);
+    for (const t of tools) {
+      const row = document.createElement("div"); row.className = "tool" + (t.err ? " err" : "");
+      const hd = document.createElement("div"); hd.className = "th";
+      hd.textContent = `${t.out === null ? "⏳" : t.err ? "✗" : "✓"} ${t.name}：${t.desc}${t.bg ? "（裏で実行）" : ""}`;
+      row.appendChild(hd);
+      if (t.body) { const pre = document.createElement("pre"); pre.className = "tb"; pre.textContent = t.body; row.appendChild(pre); }
+      if (t.out) { const pre = document.createElement("pre"); pre.className = "to"; pre.textContent = t.out; row.appendChild(pre); }
+      det.appendChild(row);
+    }
+    return det;
+  }
+  // 裏の作業の一覧
+  let tkOpen = false, lastTasks = [];
+  const ago = (iso) => { const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000)); return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`; };
+  function renderTasks() {
+    const box = $("clTasks");
+    if (!tkOpen || !lastTasks.length) { box.hidden = true; return; }
+    box.hidden = false; box.textContent = "";
+    for (const k of lastTasks) {
+      const d = document.createElement("div");
+      d.textContent = k.status === "running" ? `⏳ ${k.desc || k.id}　${ago(k.start)}`
+        : `${k.status === "completed" ? "✓" : "✗"} ${k.desc || k.id}　${k.summary ? "— " + k.summary : ""}`;
+      box.appendChild(d);
+    }
+  }
+  setInterval(() => { if (tkOpen) renderTasks(); }, 1000);  // 経過時間を進める
+
   // 端末に確認（許可・質問）が出ていたら、画面の中身と選択肢のボタンを出す。押すとその番号のキー（断るは Esc）を送る。
   // サーバーは送る直前に画面を見直し、同じ選択肢がまだ出ているときだけ送る
   // 選択肢のよくある英語に短い日本語を添える
