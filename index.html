@@ -237,6 +237,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   // 長めに聞く：話し終わってから SILENCE_MS 黙ったら終わる（何も話さなければ 8 秒）。Android の Chrome は continuous でも
   // 少し黙ると自分で止まるので、そのときは聞き直して続ける。stop() でその場で終わる
   const SILENCE_MS = 4000;
+  // 言葉で記号：「はてな」「クエスチョン（マーク）」「疑問符」→ ？（文の終わりか区切りの前のとき）。言い忘れたら Claude が文の形で判断する
+  const punct = (t) => t.replace(/[\s、]*(はてな|ハテナ|クエスチョンマーク|クエスチョン|疑問符)(?=$|[\s。、！？!?])/g, "？").replace(/？[。、]/g, "？");
   function listenLong({ onText, onDone, onError }) {
     let final = "", done = false, rec = null, timer = null;
     const arm = (ms) => { clearTimeout(timer); timer = setTimeout(() => { done = true; if (rec) rec.stop(); }, ms); };
@@ -250,13 +252,13 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
         for (let i = 0; i < e.results.length; i++) {
           if (e.results[i].isFinal) sess += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
         }
-        onText(final + sess + interim);
+        onText(punct(final + sess + interim));
       };
       r.onerror = (e) => { if (e.error !== "no-speech" && e.error !== "aborted") { done = true; onError(e.error); } };
       r.onend = () => {
         final += sess;
-        if (done) { clearTimeout(timer); onDone(final.trim()); return; }
-        try { startOne(); } catch (err) { done = true; onDone(final.trim()); }
+        if (done) { clearTimeout(timer); onDone(punct(final).trim()); return; }
+        try { startOne(); } catch (err) { done = true; onDone(punct(final).trim()); }
       };
       r.start();
     }
