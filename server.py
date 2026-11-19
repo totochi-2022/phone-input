@@ -660,8 +660,8 @@ class Handler(BaseHTTPRequestHandler):
                 subprocess.run(["dtach", "-p", sock], input=text.encode(), check=True)
                 time.sleep(0.4)
                 subprocess.run(["dtach", "-p", sock], input=b"\r", check=True)
-                wf = Path.home() / ".local/bin/win-focus"  # テレビは端末（ttyd）のタブへ（F7＋T と同じ）
-                if wf.exists():
+                wf = Path.home() / ".local/bin/win-focus"  # 「送ったら端末へ」のときだけテレビを端末（ttyd）のタブへ（F7＋T と同じ）
+                if data.get("jump") and wf.exists():
                     subprocess.Popen([str(wf), "ttyd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return self._reply(200, json.dumps({"since": since}).encode(), "application/json")
             elif path == "/reply":  # /claude で頼んだあとの Claude の返事（読み上げ向けに整えたもの）。まだなら text は null
