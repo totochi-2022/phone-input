@@ -76,6 +76,8 @@
           resize: none; line-height: 1.3; max-height: calc(4 * 1.3em + 20px); overflow-y: auto;
           background: #222; color: #eee; border: 1px solid #444; border-radius: 8px; }
   .line #send { flex: 0 0 auto; padding: 10px 16px; }
+  .line .mic { flex: 0 0 auto; padding: 10px 14px; font-size: 20px; }
+  .line .mic.rec { background: #c0392b; color: #fff; }
   #direct { margin-top: 0 !important; }
   .row label { white-space: normal; }
   .ktabs { display: flex; gap: 6px; margin-top: 8px; }
@@ -125,6 +127,7 @@
 <div id="inputView">
 <div class="kpanel" id="pJa">
 <div class="line">
+  <button id="mic" class="mic">🎤</button>
   <textarea id="text" rows="1" lang="ja" enterkeyhint="send" autocomplete="off" placeholder="音声入力して「送信」"></textarea>
   <button id="send">送信</button>
 </div>
@@ -344,6 +347,32 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   try { $("voJump").checked = localStorage.getItem("voJump") === "1"; } catch (e) {}
   $("voJump").onchange = () => { try { localStorage.setItem("voJump", $("voJump").checked ? "1" : "0"); } catch (e) {} };
   $("voSpeak").onchange = () => { try { localStorage.setItem("voSpeak", $("voSpeak").checked ? "1" : "0"); } catch (e) {} };
+
+  // 入力の画面の 🎤：押して話すと、話し終わったところで入力欄に入れて「送信」（Enter は入力の画面のチェックに従う）。もう一度押すとそこで終わる
+  let micRec = null;
+  $("mic").onclick = () => {
+    if (!SR) return status("このブラウザでは音声認識が使えません（HTTPS のアプリで開く）");
+    if (micRec) { micRec.stop(); return; }
+    const r = micRec = new SR();
+    r.lang = "ja-JP"; r.interimResults = true; r.continuous = false;
+    const before = $("text").value;
+    let final = "";
+    $("mic").classList.add("rec"); status("聞いています…");
+    r.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
+      }
+      $("text").value = before + final + interim; fitText();
+    };
+    r.onerror = (e) => status("聞き取れませんでした（" + e.error + "）");
+    r.onend = () => {
+      $("mic").classList.remove("rec"); micRec = null;
+      $("text").value = before + final; fitText();
+      if (final.trim()) $("send").onclick();
+    };
+    r.start();
+  };
 
   // QR コード：スマホで開く URL（LAN 側 IP ＋合言葉）を表示する。ライブラリは押したときに読み込む
   function loadScript(src) {
