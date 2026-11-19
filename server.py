@@ -882,16 +882,21 @@ class Handler(BaseHTTPRequestHandler):
                 # 印：🎤＝音声入力（Claude が聞き間違いを音の似た言葉として読み替える）。plain＝おすすめをそのまま送るとき（🎤 なし）。
                 # 🔊＝返事をずんだもんが読む（Claude は返事の最初に「🔊 」で始まる短い要約を書き、読み上げはそこだけ読む）
                 mark = ("" if data.get("plain") else "🎤") + ("🔊" if data.get("speak") else "")
+                # Claude が作業中なら、たいてい言い足りなかった続き。➕ の印を付け、Enter の代わりに Ctrl+X Ctrl+S（今すぐ送る、
+                # chat:sendNow）で割り込んで、前の頼みごとと合わせて読ませる
+                busy = claude_history(1).get("working")
+                if busy:
+                    mark += "➕"
                 if mark:
                     text = mark + " " + text
                 sock = claude_sock()
                 if not sock:
                     return self._reply(500, "常駐の Claude が見つかりません".encode())
                 since = time.time()
-                # 文字と Enter を分けて送る（一緒に送ると貼り付けの扱いになり、送信されないことがある）。操作キーは送らない
+                # 文字と Enter を分けて送る（一緒に送ると貼り付けの扱いになり、送信されないことがある）。操作キーは Ctrl+X Ctrl+S だけ
                 subprocess.run(["dtach", "-p", sock], input=text.encode(), check=True)
                 time.sleep(0.4)
-                subprocess.run(["dtach", "-p", sock], input=b"\r", check=True)
+                subprocess.run(["dtach", "-p", sock], input=b"\x18\x13" if busy else b"\r", check=True)
                 wf = Path.home() / ".local/bin/win-focus"  # 「送ったら端末へ」のときだけテレビを端末（ttyd）のタブへ（F7＋T と同じ）
                 if data.get("jump") and wf.exists():
                     subprocess.Popen([str(wf), "ttyd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
