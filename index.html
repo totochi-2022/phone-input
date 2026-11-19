@@ -246,15 +246,23 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 
   // 試し：音声認識（Chrome の Web Speech API、HTTPS のときだけ使える）で聞き取って、テレビに打つ（/type）か、常駐の Claude に頼む（/claude）
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // 間を待つ：区切りごとに終わらず（continuous）、話し終わってから SILENCE_MS 黙ったら終わる。何も話さなければ 8 秒で終わる
+  const SILENCE_MS = 2500;
+  function silenceStop(r) {
+    let t = setTimeout(() => r.stop(), 8000);
+    return () => { clearTimeout(t); t = setTimeout(() => r.stop(), SILENCE_MS); };
+  }
   let voRec = null;
   function voListen(btn, deliver) {
     if (!SR) { $("voText").textContent = "このブラウザでは音声認識が使えません（HTTPS のアプリで開く）"; return; }
     if (voRec) { voRec.stop(); return; }  // 話している途中でもう一度押したら、そこで終わる
     const r = voRec = new SR();
-    r.lang = "ja-JP"; r.interimResults = true; r.continuous = false;
+    r.lang = "ja-JP"; r.interimResults = true; r.continuous = true;
+    const heard = silenceStop(r);
     let final = "";
     btn.classList.add("rec"); $("voText").textContent = "聞いています…";
     r.onresult = (e) => {
+      heard();
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) final += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
@@ -354,11 +362,13 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (!SR) return status("このブラウザでは音声認識が使えません（HTTPS のアプリで開く）");
     if (micRec) { micRec.stop(); return; }
     const r = micRec = new SR();
-    r.lang = "ja-JP"; r.interimResults = true; r.continuous = false;
+    r.lang = "ja-JP"; r.interimResults = true; r.continuous = true;
+    const heard = silenceStop(r);
     const before = $("text").value;
     let final = "";
     $("mic").classList.add("rec"); status("聞いています…");
     r.onresult = (e) => {
+      heard();
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) final += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
