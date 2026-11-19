@@ -232,6 +232,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   document.querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
   let savedMode = "input";
   try { savedMode = localStorage.getItem("mode") || "input"; } catch (e) {}
+  savedMode = new URLSearchParams(location.search).get("mode") || savedMode;  // ?mode=test などで最初の画面を選べる
   setMode(savedMode);
 
   // 試し：音声認識（Chrome の Web Speech API、HTTPS のときだけ使える）で聞き取って、テレビに打つ（/type）か、常駐の Claude に頼む（/claude）
