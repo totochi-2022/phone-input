@@ -526,16 +526,49 @@ def speakable(md):
     return "\n".join(out)
 
 
-def tts(text):
-    """VOICEVOX でずんだもんの声の WAV を作る"""
+ZUNDAMON_STYLES = {3, 1, 7, 22, 38, 75, 76}  # ノーマル・あまあま・ツンツン・ささやき・ヒソヒソ・ヘロヘロ・なみだめ
+
+
+def tts(text, speaker=ZUNDAMON):
+    """VOICEVOX でずんだもんの声の WAV を作る（speaker は ZUNDAMON_STYLES のどれか）"""
+    if speaker not in ZUNDAMON_STYLES:
+        speaker = ZUNDAMON
     import urllib.request
     from urllib.parse import quote
     q = json.loads(urllib.request.urlopen(urllib.request.Request(
-        f"{VOICEVOX}/audio_query?speaker={ZUNDAMON}&text={quote(text)}", method="POST"), timeout=30).read())
+        f"{VOICEVOX}/audio_query?speaker={speaker}&text={quote(text)}", method="POST"), timeout=30).read())
     q["speedScale"] = 1.15
     return urllib.request.urlopen(urllib.request.Request(
-        f"{VOICEVOX}/synthesis?speaker={ZUNDAMON}", data=json.dumps(q).encode(),
+        f"{VOICEVOX}/synthesis?speaker={speaker}", data=json.dumps(q).encode(),
         headers={"Content-Type": "application/json"}, method="POST"), timeout=120).read()
+
+
+say_gen = 0  # テレビで読む（/say）の世代。新しく読むか止めると増え、古い読み上げは途中でやめる
+say_proc = None
+
+
+def say_tv(parts):
+    """[{text, speaker}] を順にテレビのスピーカー（PipeWire の既定の出力）で鳴らす。鳴らしている間に次を作る"""
+    global say_gen, say_proc
+    say_gen += 1
+    gen = say_gen
+    import concurrent.futures as cf
+    with cf.ThreadPoolExecutor(1) as ex:
+        nxt = ex.submit(tts, parts[0]["text"], parts[0]["speaker"]) if parts else None
+        for i in range(len(parts)):
+            wav = nxt.result()
+            nxt = ex.submit(tts, parts[i + 1]["text"], parts[i + 1]["speaker"]) if i + 1 < len(parts) else None
+            if gen != say_gen:
+                return
+            say_proc = subprocess.Popen(["pw-play", "-"], stdin=subprocess.PIPE, env=ENV)
+            say_proc.communicate(wav)
+
+
+def say_stop():
+    global say_gen
+    say_gen += 1
+    if say_proc and say_proc.poll() is None:
+        say_proc.kill()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -635,11 +668,17 @@ class Handler(BaseHTTPRequestHandler):
                 text = claude_reply(float(data.get("since", 0)))
                 return self._reply(200, json.dumps({"text": text and speakable(text)}, ensure_ascii=False).encode(),
                                    "application/json")
+            elif path == "/say":  # テレビのスピーカーで読む。parts が空なら止める
+                parts = [{"text": str(p.get("text", ""))[:500], "speaker": int(p.get("speaker", ZUNDAMON))}
+                         for p in data.get("parts", []) if str(p.get("text", "")).strip()]
+                say_stop()
+                if parts:
+                    threading.Thread(target=say_tv, args=(parts,), daemon=True).start()
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
                 text = str(data.get("text", "")).strip()[:500]
                 if not text:
                     return self._reply(400, b"empty")
-                return self._reply(200, tts(text), "audio/wav")
+                return self._reply(200, tts(text, int(data.get("speaker", ZUNDAMON))), "audio/wav")
             elif path == "/open":  # 共有（/share）から：テレビの Brave の新しいタブで開く（autotube の openurl）
                 import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8766/api/openurl", method="POST",

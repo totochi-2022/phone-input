@@ -116,7 +116,7 @@
   <button id="voTv" class="vo">🎤 テレビに打つ</button>
   <label class="tnote"><input type="checkbox" id="voEnter"> 打ったあと Enter も押す</label>
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
-  <label class="tnote"><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む</label>
+  <label class="tnote"><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む　<label><input type="radio" name="voOut" value="phone"> スマホ</label> <label><input type="radio" name="voOut" value="tv"> テレビ</label></label>
   <div class="vorow"><button id="voLast">🔁 最後の返事を読む</button><button id="voStop">⏹ 止める</button></div>
   <div id="voText"></div>
   <div id="voReply" class="tnote"></div>
@@ -280,7 +280,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     return r.json();
   }
   let voGen = 0, voAudio = null;
-  function voStop() { voGen++; if (voAudio) { voAudio.pause(); voAudio = null; } }
+  function voStop() { voGen++; if (voAudio) { voAudio.pause(); voAudio = null; } if (voOut() === "tv") post("/say", { parts: [] }).catch(() => {}); }
   async function waitReply(since) {
     const gen = ++voGen;
     $("voReply").textContent = "返事を待っています…";
@@ -292,24 +292,35 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       } catch (e) { $("voReply").textContent = "返事を取れませんでした：" + e.message; return; }
     }
   }
-  function chunks(text) {  // 文の切れ目で 120 字くらいずつに分ける（最初の声が早く出るように）
-    const out = []; let cur = "";
-    for (const s of text.split(/(?<=[。！？!?\n])/)) {
-      if (cur && (cur + s).length > 120) { out.push(cur); cur = ""; }
-      cur += s;
+  // 声の切り替え（ずんだもんのスタイル）：かっこの中の補足はヒソヒソ、「なお」「ちなみに」などで始まる余談の文はささやき
+  const V_NORMAL = 3, V_WHISPER = 22, V_HISO = 38;
+  const ASIDE = /^(なお|ちなみに|ただし|ただ、|余談|※|⚠|注意)/;
+  function chunks(text) {  // [{text, speaker}]。文の切れ目で 120 字くらいずつ（最初の声が早く出るように）
+    const out = [];
+    const add = (t, sp) => {
+      t = t.trim(); if (!t || !/[^\s、。・,.!?！？（）()]/.test(t)) return;
+      const last = out[out.length - 1];
+      if (last && last.speaker === sp && (last.text + t).length <= 120) last.text += t; else out.push({ text: t, speaker: sp });
+    };
+    for (const sent of text.split(/(?<=[。！？!?\n])/)) {
+      const base = ASIDE.test(sent.trim()) ? V_WHISPER : V_NORMAL;
+      for (const part of sent.split(/([（(][^（）()]*[）)])/)) {
+        if (/^[（(].*[）)]$/.test(part)) add(part.slice(1, -1), V_HISO); else add(part, base);
+      }
     }
-    if (cur.trim()) out.push(cur);
-    return out.map((c) => c.trim()).filter(Boolean);
+    return out;
   }
-  async function tts(text) {
+  async function tts({ text, speaker }) {
     const r = await fetch("/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
-                                    body: JSON.stringify({ text }) });
+                                    body: JSON.stringify({ text, speaker }) });
     if (!r.ok) throw new Error(await r.text());
     return URL.createObjectURL(await r.blob());
   }
+  const voOut = () => (document.querySelector('input[name="voOut"]:checked') || {}).value || "phone";
   async function speak(text, gen = ++voGen) {
     $("voReply").textContent = text;
     const parts = chunks(text);
+    if (voOut() === "tv") { await postJson("/say", { parts }).catch((e) => { $("voReply").textContent = e.message; }); return; }
     let next = parts.length ? tts(parts[0]) : null;
     for (let i = 0; i < parts.length && gen === voGen; i++) {
       let url;
@@ -327,6 +338,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   };
   $("voStop").onclick = voStop;
   try { $("voSpeak").checked = localStorage.getItem("voSpeak") !== "0"; } catch (e) { $("voSpeak").checked = true; }
+  try { const o = localStorage.getItem("voOut") || "phone"; document.querySelector(`input[name="voOut"][value="${o}"]`).checked = true; } catch (e) {}
+  document.querySelectorAll('input[name="voOut"]').forEach((r) => r.onchange = () => { try { localStorage.setItem("voOut", r.value); } catch (e) {} });
   $("voSpeak").onchange = () => { try { localStorage.setItem("voSpeak", $("voSpeak").checked ? "1" : "0"); } catch (e) {} };
 
   // QR コード：スマホで開く URL（LAN 側 IP ＋合言葉）を表示する。ライブラリは押したときに読み込む
