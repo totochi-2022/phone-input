@@ -549,6 +549,19 @@ class Handler(BaseHTTPRequestHandler):
                     mouse_click(data["click"])
                 for op in data.get("ops", []):  # 押す・離す・ダブルクリックなど。移動のあとに順に実行
                     mouse_op(op)
+            elif path == "/claude":  # 音声で頼む：常駐の Claude（~/work/howm、dtach の中）の入力欄に打ち込んで送る（tonzura だけ）
+                text = " ".join(str(data.get("text", "")).split())  # 改行は空白に（途中で送信されないように）
+                if not text:
+                    return self._reply(400, b"empty")
+                tasks = Path.home() / ".claude_plugin/scripts/claude-tasks"
+                sock = subprocess.run([str(tasks), "sock", str(Path.home() / "work/howm")], capture_output=True,
+                                      text=True).stdout.strip() if tasks.exists() else ""
+                if not sock or not Path(sock).is_socket():
+                    return self._reply(500, "常駐の Claude が見つかりません".encode())
+                # 文字と Enter を分けて送る（一緒に送ると貼り付けの扱いになり、送信されないことがある）。操作キーは送らない
+                subprocess.run(["dtach", "-p", sock], input=text.encode(), check=True)
+                time.sleep(0.4)
+                subprocess.run(["dtach", "-p", sock], input=b"\r", check=True)
             elif path == "/open":  # 共有（/share）から：テレビの Brave の新しいタブで開く（autotube の openurl）
                 import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8766/api/openurl", method="POST",

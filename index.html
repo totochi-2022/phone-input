@@ -52,6 +52,14 @@
   #bmView iframe { width: 100%; height: 100%; border: 0; background: #111; }
   body.bm #inputView { display: none; }
   body.bm #bmView { display: block; }
+  #testView { display: none; }
+  body.test #inputView { display: none; }
+  body.test #testView { display: grid; gap: 14px; }
+  .modebar [data-mode="test"] { flex: 0 0 auto; padding: 9px 12px; }
+  .vo { padding: 28px 8px; font-size: 22px; border-radius: 14px; }
+  .vo.rec { background: #c0392b; color: #fff; }
+  .tnote { color: #999; font-size: 13px; margin: 0; }
+  #voText { min-height: 3em; font-size: 18px; color: #ddd; white-space: pre-wrap; }
   #qr { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.85);
         align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 16px; }
   #qr.on { display: flex; }
@@ -96,10 +104,18 @@
   <button data-mode="input">⌨ 入力</button>
   <button data-mode="at">▶ autotube</button>
   <button data-mode="bm" title="テレビの Brave のブックマークを開く（autotube の /bookmarks）">🔖 ブックマーク</button>
+  <button data-mode="test" title="試し：音声でテレビに打つ・Claude に頼む">🧪</button>
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="atView"><iframe id="atFrame" title="autotube"></iframe></div>
 <div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe></div>
+<div id="testView">
+  <p class="tnote">試しの画面：押して話すと、終わったところで送ります</p>
+  <button id="voTv" class="vo">🎤 テレビに打つ</button>
+  <label class="tnote"><input type="checkbox" id="voEnter"> 打ったあと Enter も押す</label>
+  <button id="voClaude" class="vo">🤖 Claude に頼む</button>
+  <div id="voText"></div>
+</div>
 <div id="inputView">
 <div class="kpanel" id="pJa">
 <div class="line">
@@ -199,6 +215,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   function setMode(mode) {
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
+    document.body.classList.toggle("test", mode === "test");
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {
       $("atView").style.top = $("modebar").offsetHeight + "px";
@@ -216,6 +233,35 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   let savedMode = "input";
   try { savedMode = localStorage.getItem("mode") || "input"; } catch (e) {}
   setMode(savedMode);
+
+  // 試し：音声認識（Chrome の Web Speech API、HTTPS のときだけ使える）で聞き取って、テレビに打つ（/type）か、常駐の Claude に頼む（/claude）
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let voRec = null;
+  function voListen(btn, deliver) {
+    if (!SR) { $("voText").textContent = "このブラウザでは音声認識が使えません（HTTPS のアプリで開く）"; return; }
+    if (voRec) { voRec.stop(); return; }  // 話している途中でもう一度押したら、そこで終わる
+    const r = voRec = new SR();
+    r.lang = "ja-JP"; r.interimResults = true; r.continuous = false;
+    let final = "";
+    btn.classList.add("rec"); $("voText").textContent = "聞いています…";
+    r.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
+      }
+      $("voText").textContent = final + interim;
+    };
+    r.onerror = (e) => { $("voText").textContent = "聞き取れませんでした（" + e.error + "）"; };
+    r.onend = async () => {
+      btn.classList.remove("rec"); voRec = null;
+      if (!final.trim()) return;
+      try { await deliver(final.trim()); $("voText").textContent = "送りました：" + final.trim(); }
+      catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
+    };
+    r.start();
+  }
+  $("voTv").onclick = () => voListen($("voTv"), (text) => post("/type", { text, enter: $("voEnter").checked }));
+  $("voClaude").onclick = () => voListen($("voClaude"), (text) => post("/claude", { text }));
 
   // QR コード：スマホで開く URL（LAN 側 IP ＋合言葉）を表示する。ライブラリは押したときに読み込む
   function loadScript(src) {
