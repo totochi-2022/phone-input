@@ -84,6 +84,7 @@
   #chat .tool .th { color: #cde; }
   #chat .tool pre { white-space: pre-wrap; word-break: break-all; margin: 3px 0; padding: 4px 6px; border-radius: 4px; font-size: 11px; max-height: 30vh; overflow: auto; }
   #chat .tool pre.tb { background: #10151c; color: #e6c07b; }
+  #chat .tool pre code.hljs { padding: 0; background: transparent; }
   #chat .tool pre.to { background: #0c0f14; color: #bbb; }
   #clPrompt:empty { display: none; }
   .sug[hidden] { display: none; }
@@ -235,6 +236,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 </div>
 <p style="text-align:center;margin-top:16px"><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
 </div><!-- /inputView -->
+<link rel="stylesheet" href="/vendor/hljs-dark.min.css">
+<script src="/vendor/highlight.min.js"></script><!-- 道具の使用のコマンド・出力の色付け -->
 <script>
   const token = new URLSearchParams(location.search).get("t") || "";
   try { if (token) localStorage.setItem("token", token); } catch (e) {}  // 共有（/share）で使う
@@ -535,12 +538,27 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       const hd = document.createElement("div"); hd.className = "th";
       hd.textContent = `${t.out === null ? "⏳" : t.err ? "✗" : "✓"} ${t.name}：${t.desc}${t.bg ? "（裏で実行）" : ""}`;
       row.appendChild(hd);
-      if (t.body) { const pre = document.createElement("pre"); pre.className = "tb"; pre.textContent = t.body; row.appendChild(pre); }
-      if (t.out) { const pre = document.createElement("pre"); pre.className = "to"; pre.textContent = t.out; row.appendChild(pre); }
+      if (t.body) row.appendChild(codeEl(t.body, "tb", t.name === "Bash" ? "bash" : null));
+      if (t.out) row.appendChild(codeEl(t.out, "to", "auto"));
       det.appendChild(row);
     }
     return det;
   }
+  // 色付け（highlight.js）：コマンドはシェルの文法、出力は中身から言語を見分ける（長すぎるものは重いので色を付けない）
+  const AUTO_LANGS = ["bash", "json", "python", "javascript", "yaml", "diff", "xml", "css", "ini"];
+  function codeEl(text, cls, lang) {
+    const pre = document.createElement("pre"); pre.className = cls;
+    const code = document.createElement("code"); pre.appendChild(code);
+    try {
+      if (window.hljs && lang && text.length < 6000) {
+        const r = lang === "auto" ? hljs.highlightAuto(text, AUTO_LANGS) : hljs.highlight(text, { language: lang });
+        if (lang !== "auto" || r.relevance >= 5) { code.innerHTML = r.value; code.className = "hljs"; return pre; }
+      }
+    } catch (e) {}
+    code.textContent = text;
+    return pre;
+  }
+
   // 裏の作業の一覧
   let tkOpen = false, lastTasks = [];
   const ago = (iso) => { const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000)); return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`; };

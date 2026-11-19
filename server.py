@@ -885,7 +885,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     STATIC = {"/sw.js": ("sw.js", "text/javascript; charset=utf-8"), "/share": ("share.html", "text/html; charset=utf-8"),
-              "/icon-192.png": ("icon-192.png", "image/png"), "/icon-512.png": ("icon-512.png", "image/png")}
+              "/icon-192.png": ("icon-192.png", "image/png"), "/icon-512.png": ("icon-512.png", "image/png"),
+              # 色付けの部品 highlight.js 11.9.0（cdnjs から一度だけ落として置いたもの。外を通らない）
+              "/vendor/highlight.min.js": ("vendor/highlight.min.js", "text/javascript; charset=utf-8"),
+              "/vendor/hljs-dark.min.css": ("vendor/hljs-dark.min.css", "text/css; charset=utf-8")}
 
     def do_GET(self):
         path = urlparse(self.path).path
