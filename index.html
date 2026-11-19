@@ -501,11 +501,11 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     // 裏の作業：実行中の数を状態の行に。押すと一覧（説明・経過時間・終わったものの結果）
     const tasks = h.tasks || [], run = tasks.filter((k) => k.status === "running");
     const tkHtml = tasks.length ? `<span class="tk" id="tkBtn">${run.length ? `⏳ 実行中 ${run.length}` : "✓ 裏の作業"} ›</span>` : "";
-    // コンテキストの使用量：半分までふつう、80% まで黄、超えたら赤。押すとトークンの数
+    // コンテキストの残り（端末の Claude Code と同じく残りで出す）：20% 以下で黄、10% を切ったら赤。押すとトークンの数
     let cxHtml = "";
     if (h.ctx) {
-      const pc = Math.round(h.ctx / h.ctx_max * 100), cls = pc >= 80 ? "cxr" : pc >= 50 ? "cxy" : "";
-      cxHtml = `<span class="cx ${cls}" id="cxBtn">コンテキスト ${pc}%${cxOpen ? `（${(h.ctx / 1000).toFixed(1)}k / ${h.ctx_max / 1e6}M）` : ""}</span>`;
+      const left = Math.max(0, Math.round(100 - h.ctx / h.ctx_max * 100)), cls = left < 10 ? "cxr" : left <= 20 ? "cxy" : "";
+      cxHtml = `<span class="cx ${cls}" id="cxBtn">コンテキスト 残り ${left}%${cxOpen ? `（${(h.ctx / 1000).toFixed(1)}k / ${h.ctx_max / 1e6}M 使用）` : ""}</span>`;
     }
     if ($("clStatus").innerHTML !== stHtml + cxHtml + tkHtml) {
       $("clStatus").innerHTML = stHtml + cxHtml + tkHtml;
