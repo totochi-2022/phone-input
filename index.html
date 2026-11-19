@@ -151,7 +151,8 @@
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
   <button id="clSuggest" class="sug" hidden></button>
-  <div class="phrow"><label class="phbtn">📷<input type="file" id="phFile" accept="image/*" multiple hidden></label>
+  <div class="phrow"><label class="phbtn" title="すぐカメラで撮る">📸<input type="file" id="phCam" accept="image/*" capture="environment" hidden></label>
+    <label class="phbtn" title="ギャラリーから選ぶ（何枚でも）">📷<input type="file" id="phFile" accept="image/*" multiple hidden></label>
     <div id="phList"></div><button id="phSend" hidden>写真だけ送る</button></div>
   <div class="opts tnote">
     <label><input type="checkbox" id="voSpeak"> ずんだもんが読む</label>
@@ -377,8 +378,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
     return new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85));
   }
-  $("phFile").onchange = async () => {
-    for (const f of $("phFile").files) {
+  async function phAdd(input) {
+    for (const f of input.files) {
       const item = { url: URL.createObjectURL(f), path: null };
       phPending.push(item); phRender();
       try {
@@ -392,8 +393,10 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       }
       phRender();
     }
-    $("phFile").value = "";
-  };
+    input.value = "";
+  }
+  $("phFile").onchange = () => phAdd($("phFile"));
+  $("phCam").onchange = () => phAdd($("phCam"));  // 📸：capture でカメラがすぐ開く
   $("phSend").onclick = async () => {
     try { await askClaude(""); $("voText").textContent = "写真を送りました"; }
     catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
