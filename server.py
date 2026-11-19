@@ -638,28 +638,50 @@ def claude_prompt():
     except (OSError, subprocess.TimeoutExpired):
         return None
     import re
-    lines = [re.sub(r"[\s│]+$", "", ln) for ln in lines][-40:]
-    opts, first = [], None
+    lines = [re.sub(r"[\s│]+$", "", ln) for ln in lines][-60:]
+    opts, first, last = [], None, None
     for i, ln in enumerate(lines):
         m = re.match(r"^[\s│]*(❯\s*)?(\d)\.\s+(\S.*)$", ln)
         if m:
             if first is None:
                 first = i
             opts.append({"n": int(m.group(2)), "label": m.group(3).strip(), "sel": bool(m.group(1))})
+            last = i
+        elif opts and last == i - 1 and re.match(r"^\s{4,}\S", ln):  # 長い選択肢の続きの行（字下げだけ）
+            opts[-1]["label"] += " " + ln.strip()
+            last = i
     # 選択肢は 1 から連番で、選んでいる印（❯）が 1 つあるときだけ確認とみなす（会話の中の番号付きの箇条書きと区別）
-    ok = len(opts) >= 2 and [o["n"] for o in opts] == list(range(1, len(opts) + 1)) and sum(o["sel"] for o in opts) == 1
-    # 調べ用の記録：確認らしい画面（選択肢か「Do you want」がある）を、見つけたか・見つけられなかったかと一緒に残す
-    if opts or any("Do you want" in ln for ln in lines):
-        try:
-            with open(Path.home() / ".local/state/phone-input/prompt-debug.log", "a") as fh:
-                fh.write(f"===== {time.strftime('%H:%M:%S')} {'OK' if ok else 'NG'} {opts}\n" + "\n".join(lines[-25:]) + "\n")
-        except OSError:
-            pass
-    if not ok:
+    if len(opts) < 2 or [o["n"] for o in opts] != list(range(1, len(opts) + 1)) or sum(o["sel"] for o in opts) != 1:
         return None
-    top = max(0, first - 14)  # 選択肢の上の、何をしようとしているかの部分
-    screen = "\n".join(ln for ln in lines[top:] if ln.strip() and not set(ln.strip()) <= set("─━"))
-    return {"screen": screen, "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
+    # 確認の枠：選択肢より上で最後の実線（───）から。上から 見出し → 説明 → 点線（╌）にはさまれた中身 → 注記 → 質問
+    top = next((i for i in range(first - 1, -1, -1) if lines[i].strip() and set(lines[i].strip()) <= set("─━")), None)
+    region = lines[top + 1:first] if top is not None else lines[max(0, first - 14):first]
+    screen = "\n".join(ln for ln in region if ln.strip())
+    title, desc, code, note, question, part = "", [], [], [], "", 0
+    for ln in region:
+        s = ln.strip()
+        if not s:
+            continue
+        if set(s) <= set("╌┄-"):
+            part += 1  # 点線：0＝見出し・説明、1＝中身、2 以上＝注記
+            continue
+        if part == 1:
+            code.append(re.sub(r"^\s?│\s?", "", ln.rstrip()))
+        elif not title and part == 0:
+            title = s
+        elif part == 0:
+            if not s.startswith("Tip:"):
+                desc.append(s)
+        else:
+            note.append(s)
+    for bucket in (note, desc):  # 質問（最後の「〜?」の行）は別に出す
+        if bucket and bucket[-1].endswith(("?", "？")):
+            question = bucket.pop()
+            break
+    if part == 1 and not note and not question:  # 点線が 1 本だけ（閉じていない）なら中身ではない
+        desc += code; code = []
+    return {"screen": screen, "title": title, "desc": desc, "code": "\n".join(code), "note": note, "question": question,
+            "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
 
 
 def claude_suggestion():

@@ -82,6 +82,11 @@
   #clPrompt .ans { display: flex; flex-direction: column; gap: 5px; }
   #clPrompt .ans button { text-align: left; padding: 9px 10px; font-size: 14px; }
   #clPrompt .ans button.no { background: #5a2a2a; }
+  #clPrompt .ans button small { display: block; color: #bbb; font-size: 12px; margin-top: 2px; }
+  #clPrompt .pt { font-weight: bold; font-size: 15px; color: #f0c040; }
+  #clPrompt .pd { font-size: 12px; color: #ccc; word-break: break-all; }
+  #clPrompt .pq { font-weight: bold; font-size: 14px; margin: 4px 0 6px; }
+  #clPrompt pre { background: #111; border-radius: 6px; padding: 6px; margin: 4px 0; }
   #clStatus b { color: #eee; } #clStatus .att { color: #f0c040; }
   .tnote { color: #999; font-size: 13px; margin: 0; }
   #voText { min-height: 3em; font-size: 18px; color: #ddd; white-space: pre-wrap; }
@@ -417,6 +422,16 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   }
   // 端末に確認（許可・質問）が出ていたら、画面の中身と選択肢のボタンを出す。押すとその番号のキー（断るは Esc）を送る。
   // サーバーは送る直前に画面を見直し、同じ選択肢がまだ出ているときだけ送る
+  // 選択肢のよくある英語に短い日本語を添える
+  function glossJa(l) {
+    if (/^Yes$/i.test(l)) return "はい（今回だけ）";
+    if (/^No\b/i.test(l)) return "いいえ";
+    if (/don.t ask again/i.test(l)) return "はい、このコマンドは今後聞かない";
+    if (/switch to auto mode/i.test(l)) return "はい、auto モードに切り替える";
+    if (/accept edits|allow all edits/i.test(l)) return "はい、このセッションの間はファイルの編集を許す";
+    if (/allow reading/i.test(l)) return "はい、この場所の読み取りを今後許す";
+    return "";
+  }
   let promptSig = "";
   function showPrompt(p) {
     const sig = p ? p.screen + "|" + p.options.map((o) => o.label).join("|") : "";
@@ -425,7 +440,15 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     const box = $("clPrompt");
     box.textContent = "";
     if (!p) return;
-    const pre = document.createElement("pre"); pre.textContent = p.screen; box.appendChild(pre);
+    // 見出し（太字）→ 説明 → 中身（コマンド・ファイルの中身、等幅）→ 注記 → 質問（太字）。分けられなければ画面のまま
+    const add = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.textContent = text; box.appendChild(e); };
+    if (p.title) {
+      add("div", "pt", p.title);
+      for (const d of p.desc || []) add("div", "pd", d);
+      if (p.code) add("pre", "", p.code);
+      for (const d of p.note || []) add("div", "pd", d);
+      if (p.question) add("div", "pq", p.question);
+    } else add("pre", "", p.screen);
     const ans = document.createElement("div"); ans.className = "ans"; box.appendChild(ans);
     const labels = p.options.map((o) => o.label);
     const send = async (body, btn) => {
@@ -437,6 +460,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     for (const o of p.options) {
       const b = document.createElement("button");
       b.textContent = `${o.n}. ${o.label}`;
+      const ja = glossJa(o.label);
+      if (ja) { const sm = document.createElement("small"); sm.textContent = ja; b.appendChild(sm); }
       if (/^no\b|いいえ|^No,/i.test(o.label)) b.className = "no";
       b.onclick = () => send({ n: o.n }, b);
       ans.appendChild(b);
