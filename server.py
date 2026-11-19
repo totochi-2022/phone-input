@@ -650,6 +650,7 @@ class Handler(BaseHTTPRequestHandler):
                 text = " ".join(str(data.get("text", "")).split())  # 改行は空白に（途中で送信されないように）
                 if not text:
                     return self._reply(400, b"empty")
+                text = "🎤 " + text  # 音声入力の印（Claude が聞き間違いを音の似た言葉として読み替えられるように）
                 tasks = Path.home() / ".claude_plugin/scripts/claude-tasks"
                 sock = subprocess.run([str(tasks), "sock", str(Path.home() / "work/howm")], capture_output=True,
                                       text=True).stdout.strip() if tasks.exists() else ""
