@@ -884,7 +884,7 @@ class Handler(BaseHTTPRequestHandler):
                 mark = ("" if data.get("plain") else "🎤") + ("🔊" if data.get("speak") else "")
                 # Claude が作業中なら、たいてい言い足りなかった続き。➕ の印を付け、Enter の代わりに Ctrl+X Ctrl+S（今すぐ送る、
                 # chat:sendNow）で割り込んで、前の頼みごとと合わせて読ませる
-                busy = claude_history(1).get("working")
+                busy = data.get("cut", True) and claude_history(1).get("working")  # cut＝画面の「続きは割り込む」
                 if busy:
                     mark += "➕"
                 if mark:

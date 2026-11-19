@@ -145,6 +145,7 @@
     <label><input type="checkbox" id="voSpeak"> ずんだもんが読む</label>
     <label><input type="radio" name="voOut" value="phone"> スマホ</label><label><input type="radio" name="voOut" value="tv"> テレビ</label>
     <label><input type="checkbox" id="voJump"> 端末へ切替</label>
+    <label title="Claude が作業中に頼んだら、続きとして今すぐ割り込む（Ctrl+X Ctrl+S）"><input type="checkbox" id="voCut"> 続きは割り込む</label>
   </div>
   <div class="vorow"><button id="voLast">🔁 最後の返事</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 クリア</button></div>
   <div id="clStatus" class="tnote"></div>
@@ -339,7 +340,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     });
   }
   async function askClaude(text) {
-    const r = await postJson("/claude", { text, jump: $("voJump").checked, speak: $("voSpeak").checked });
+    const r = await postJson("/claude", { text, jump: $("voJump").checked, speak: $("voSpeak").checked, cut: $("voCut").checked });
     if ($("voSpeak").checked) waitReply(r.since);
   }
   $("voClaude").onclick = () => voListen($("voClaude"), askClaude);
@@ -502,7 +503,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     const text = $("clSuggest").dataset.text; if (!text) return;
     $("clSuggest").disabled = true;
     try {
-      const r = await postJson("/claude", { text, plain: true, jump: $("voJump").checked, speak: $("voSpeak").checked });
+      const r = await postJson("/claude", { text, plain: true, jump: $("voJump").checked, speak: $("voSpeak").checked, cut: $("voCut").checked });
       $("voText").textContent = "送りました：" + text;
       if ($("voSpeak").checked) waitReply(r.since);
     } catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
@@ -526,6 +527,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   try { const o = localStorage.getItem("voOut") || "phone"; document.querySelector(`input[name="voOut"][value="${o}"]`).checked = true; } catch (e) {}
   document.querySelectorAll('input[name="voOut"]').forEach((r) => r.onchange = () => { try { localStorage.setItem("voOut", r.value); } catch (e) {} });
   try { $("voJump").checked = localStorage.getItem("voJump") === "1"; } catch (e) {}
+  try { $("voCut").checked = localStorage.getItem("voCut") !== "0"; } catch (e) { $("voCut").checked = true; }  // 最初はオン
+  $("voCut").onchange = () => { try { localStorage.setItem("voCut", $("voCut").checked ? "1" : "0"); } catch (e) {} };
   $("voJump").onchange = () => { try { localStorage.setItem("voJump", $("voJump").checked ? "1" : "0"); } catch (e) {} };
   $("voSpeak").onchange = () => { try { localStorage.setItem("voSpeak", $("voSpeak").checked ? "1" : "0"); } catch (e) {} };
 
