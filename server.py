@@ -535,6 +535,9 @@ def _tool_desc(name, inp):
     return desc, str(body)
 
 
+CTX_MAX = 1_000_000  # コンテキストウィンドウの大きさ（この Claude は 1M）
+
+
 def claude_history(n=30):
     """会話の最近のやり取り。items：[{who: "user"|"claude"|"tools", text, final, t, tools}]（新しいものが最後）。
     tools は返事と返事の間に使った道具（名前・説明・中身・出力・裏の作業の番号）。
@@ -548,7 +551,7 @@ def claude_history(n=30):
     with open(f, "rb") as fh:
         fh.seek(max(0, f.stat().st_size - 4_000_000))
         lines = fh.read().splitlines()
-    items, working, tools_by_id, tasks = [], False, {}, {}
+    items, working, tools_by_id, tasks, ctx = [], False, {}, {}, 0
     try:
         cutoff = CHAT_CUTOFF.read_text().strip()
     except OSError:
@@ -602,6 +605,9 @@ def claude_history(n=30):
             if not hidden:
                 items.append({"who": "user", "text": text[:2000], "t": d.get("timestamp")})
         elif d.get("type") == "assistant" and isinstance(c, list):
+            u = m.get("usage") or {}
+            if u:  # コンテキストの使用量：直近の返事で読み込んだトークンの合計
+                ctx = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0)
             text = "".join(x.get("text", "") for x in c if x.get("type") == "text").strip()
             final = m.get("stop_reason") == "end_turn"
             if final:
@@ -624,7 +630,8 @@ def claude_history(n=30):
     tl = sorted(tasks.values(), key=lambda k: k.get("start") or k.get("end") or "")
     tl = [k for k in tl if k.get("start")]  # 始めたところが見えている作業だけ
     running = [k for k in tl if k.get("status") == "running"]
-    return {"items": items[-n:], "working": working, "tasks": running + [k for k in tl if k.get("status") != "running"][-10:][::-1]}
+    return {"items": items[-n:], "working": working, "tasks": running + [k for k in tl if k.get("status") != "running"][-10:][::-1],
+            "ctx": ctx, "ctx_max": CTX_MAX}
 
 
 GLYPH_JA = {"⏳": "作業中", "🔒": "許可待ち", "⌨": "入力待ち", "❓": "質問あり", "🔔": "終わった", "💤": "待機", "🌙": "裏で動作"}

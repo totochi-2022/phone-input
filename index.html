@@ -75,6 +75,7 @@
   #chat .busy { align-self: flex-start; color: #aaa; font-size: 12px; }
   #clStatus { display: flex; flex-wrap: wrap; gap: 2px 12px; }
   #clStatus .tk { color: #8cf; cursor: pointer; }
+  #clStatus .cx { cursor: pointer; } #clStatus .cxy { color: #f0c040; } #clStatus .cxr { color: #ff6060; font-weight: bold; }
   #clTasks { background: #1a1f28; border-radius: 8px; padding: 6px 8px; max-height: 25vh; overflow: auto; font-size: 12px; line-height: 1.6; }
   #clTasks[hidden] { display: none; }
   #chat details.tools { align-self: flex-start; max-width: 92%; font-size: 12px; color: #9ab; }
@@ -500,9 +501,16 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     // 裏の作業：実行中の数を状態の行に。押すと一覧（説明・経過時間・終わったものの結果）
     const tasks = h.tasks || [], run = tasks.filter((k) => k.status === "running");
     const tkHtml = tasks.length ? `<span class="tk" id="tkBtn">${run.length ? `⏳ 実行中 ${run.length}` : "✓ 裏の作業"} ›</span>` : "";
-    if ($("clStatus").innerHTML !== stHtml + tkHtml) {
-      $("clStatus").innerHTML = stHtml + tkHtml;
+    // コンテキストの使用量：半分までふつう、80% まで黄、超えたら赤。押すとトークンの数
+    let cxHtml = "";
+    if (h.ctx) {
+      const pc = Math.round(h.ctx / h.ctx_max * 100), cls = pc >= 80 ? "cxr" : pc >= 50 ? "cxy" : "";
+      cxHtml = `<span class="cx ${cls}" id="cxBtn">コンテキスト ${pc}%${cxOpen ? `（${(h.ctx / 1000).toFixed(1)}k / ${h.ctx_max / 1e6}M）` : ""}</span>`;
+    }
+    if ($("clStatus").innerHTML !== stHtml + cxHtml + tkHtml) {
+      $("clStatus").innerHTML = stHtml + cxHtml + tkHtml;
       if ($("tkBtn")) $("tkBtn").onclick = () => { tkOpen = !tkOpen; renderTasks(); };
+      if ($("cxBtn")) $("cxBtn").onclick = () => { cxOpen = !cxOpen; chatRefresh(); };
     }
     lastTasks = tasks; renderTasks();
     showPrompt(h.prompt);
@@ -577,6 +585,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 
   // 裏の作業の一覧
   let tkOpen = false, lastTasks = [];
+  var cxOpen = false;  // コンテキストのトークンの数を出すか（var：chatRefresh が先に動くことがあるため）
   const ago = (iso) => { const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000)); return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`; };
   function renderTasks() {
     const box = $("clTasks");
