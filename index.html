@@ -369,7 +369,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   $("voJump").onchange = () => { try { localStorage.setItem("voJump", $("voJump").checked ? "1" : "0"); } catch (e) {} };
   $("voSpeak").onchange = () => { try { localStorage.setItem("voSpeak", $("voSpeak").checked ? "1" : "0"); } catch (e) {} };
 
-  // 入力の画面の 🎤：押して話すと、話し終わったところで入力欄に入れて「送信」（Enter は入力の画面のチェックに従う）。もう一度押すとそこで終わる
+  // 入力の画面の 🎤：押して話すと、聞き取った文字を入力欄に入れる（送信はしない。直してから自分で「送信」）。もう一度押すとそこで終わる
   let micRec = null;
   $("mic").onclick = () => {
     if (!SR) return status("このブラウザでは音声認識が使えません（HTTPS のアプリで開く）");
@@ -382,7 +382,8 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       onDone: (text) => {
         $("mic").classList.remove("rec"); micRec = null;
         $("text").value = before + text; fitText();
-        if (text) $("send").onclick();
+        // 送らない：誤字をキーボードで直してから自分で「送信」。終わったら欄にカーソルを置く（最後に）
+        if (text) { const t = $("text"); t.focus(); t.setSelectionRange(t.value.length, t.value.length); status("直してから「送信」"); }
       },
     });
   };
