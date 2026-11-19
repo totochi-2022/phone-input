@@ -374,16 +374,18 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   $("mic").onclick = () => {
     if (!SR) return status("このブラウザでは音声認識が使えません（HTTPS のアプリで開く）");
     if (micRec) { micRec.stop(); return; }
-    const before = $("text").value;
+    // カーソルの位置（選んだ範囲があればそこを置き換え）に差し込む。🎤 を押しても欄の選択位置は残っている
+    const ta = $("text"), v0 = ta.value;
+    const head = v0.slice(0, ta.selectionStart ?? v0.length), tail = v0.slice(ta.selectionEnd ?? v0.length);
     $("mic").classList.add("rec"); status("聞いています…");
     micRec = listenLong({
-      onText: (t) => { $("text").value = before + t; fitText(); },
+      onText: (t) => { ta.value = head + t + tail; fitText(); },
       onError: (err) => status("聞き取れませんでした（" + err + "）"),
       onDone: (text) => {
         $("mic").classList.remove("rec"); micRec = null;
-        $("text").value = before + text; fitText();
-        // 送らない：誤字をキーボードで直してから自分で「送信」。終わったら欄にカーソルを置く（最後に）
-        if (text) { const t = $("text"); t.focus(); t.setSelectionRange(t.value.length, t.value.length); status("直してから「送信」"); }
+        ta.value = head + text + tail; fitText();
+        // 送らない：誤字をキーボードで直してから自分で「送信」。終わったら入れた文字のすぐ後ろにカーソル
+        if (text) { const c = head.length + text.length; ta.focus(); ta.setSelectionRange(c, c); status("直してから「送信」"); }
       },
     });
   };
