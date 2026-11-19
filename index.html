@@ -629,6 +629,9 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (/^No\b/i.test(l)) return "いいえ";
     if (/don.t ask again/i.test(l)) return "はい、このコマンドは今後聞かない";
     if (/switch to auto mode/i.test(l)) return "はい、auto モードに切り替える";
+    if (/^Disconnect this session/i.test(l)) return "このセッションのリモートコントロールを切る";
+    if (/^Show QR code/i.test(l)) return "QR コードを出す（スマホで読んでこのセッションを開く）";
+    if (/^Continue$/i.test(l)) return "そのまま続ける（閉じる）";
     if (/accept edits|allow all edits/i.test(l)) return "はい、このセッションの間はファイルの編集を許す";
     if (/allow reading/i.test(l)) return "はい、この場所の読み取りを今後許す";
     return "";

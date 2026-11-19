@@ -754,7 +754,7 @@ def claude_prompt():
             last = i
     # 選択肢は 1 から連番で、選んでいる印（❯）が 1 つあるときだけ確認とみなす（会話の中の番号付きの箇条書きと区別）
     if len(opts) < 2 or [o["n"] for o in opts] != list(range(1, len(opts) + 1)) or sum(o["sel"] for o in opts) != 1:
-        return None
+        return claude_menu(lines)
     # 確認の枠：選択肢より上で最後の実線（───）から。上から 見出し → 説明 → 点線（╌）にはさまれた中身 → 注記 → 質問
     top = next((i for i in range(first - 1, -1, -1) if lines[i].strip() and set(lines[i].strip()) <= set("─━")), None)
     region = lines[top + 1:first] if top is not None else lines[max(0, first - 14):first]
@@ -786,6 +786,35 @@ def claude_prompt():
             "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
 
 
+def claude_menu(lines):
+    """番号の無いメニュー（/remote-control など。「↑/↓ to navigate · Enter to select · Esc to close」の画面）。
+    枠の上端（▔▔▔）から、字下げ 2 の行＝見出し・説明、字下げ 4 か「  ❯ 」の行＝選択肢（右に 3 つ以上の空白で説明）"""
+    import re
+    foot = next((i for i in range(len(lines) - 1, -1, -1) if "Enter to select" in lines[i]), None)
+    if foot is None:
+        return None
+    top = next((i for i in range(foot - 1, -1, -1) if lines[i].strip() and set(lines[i].strip()) <= set("▔─━")), None)
+    if top is None:
+        return None
+    title, desc, opts = "", [], []
+    for ln in lines[top + 1:foot]:
+        if not ln.strip():
+            continue
+        m = re.match(r"^  (❯| ) (\S.*)$", ln)
+        if m and (m.group(1) == "❯" or ln.startswith("    ")):
+            label, sub = (re.split(r"\s{3,}", m.group(2).strip(), maxsplit=1) + [""])[:2]
+            opts.append({"n": len(opts) + 1, "label": label + (" — " + sub.strip() if sub.strip() else ""), "sel": m.group(1) == "❯"})
+        elif not opts and not title:
+            title = ln.strip()
+        elif not opts:
+            desc.append(ln.strip())
+    if len(opts) < 2 or sum(o["sel"] for o in opts) != 1:
+        return None
+    sel = next(o["n"] for o in opts if o["sel"])
+    return {"screen": "\n".join(ln for ln in lines[top + 1:foot] if ln.strip()), "title": title, "desc": desc, "code": "",
+            "note": [], "question": "", "menu": True, "sel": sel, "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
+
+
 def claude_leftover():
     """入力欄に打ちかけの文（普通の色、おすすめではない）が残っていればその文。続けて送ると後ろにつながって一緒に送られる"""
     import re
@@ -808,7 +837,7 @@ def claude_leftover():
             if re.search(r"\x1b\[(2|38;5;24\d|90)m", codes) or "\x1b[2;" in codes:
                 return None  # 薄い字＝おすすめ・案内
             return text
-    return None
+    return "（端末に確認やメニューの画面が出ています。先にそちらに答えてください）"
 
 
 def claude_suggestion():
@@ -1111,7 +1140,9 @@ class Handler(BaseHTTPRequestHandler):
                     n = int(data.get("n", 0))
                     if n not in [o["n"] for o in p["options"]]:
                         return self._reply(400, b"bad option")
-                    key = str(n).encode()
+                    # 番号の無いメニューは矢印で選んでから Enter
+                    key = (b"\x1b[B" * (n - p["sel"]) if n >= p["sel"] else b"\x1b[A" * (p["sel"] - n)) + b"\r" \
+                        if p.get("menu") else str(n).encode()
                 subprocess.run(["dtach", "-p", sock], input=key, check=True)
                 return self._reply(200, b'{"ok": true}', "application/json")  # 画面の側は JSON で読む
             elif path == "/clientlog":  # 画面で起きたエラーの記録（Claude が読んで追いかける）。1MB を超えたら .1 に回す
