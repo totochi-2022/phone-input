@@ -217,10 +217,15 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     } catch (e) { /* 対応していないブラウザ（iPhone など）では何もしない */ }
   }
   window.addEventListener("pointerup", lockPortrait, true);
-  // 全画面になると上の段の高さは同じでも画面の高さが変わるので、iframe の位置を合わせ直す
-  document.addEventListener("fullscreenchange", () => {
-    for (const v of ["atView", "bmView"]) $(v).style.top = $("modebar").offsetHeight + "px";
-  });
+  // 上に固定する画面（autotube・ブックマーク・Claude）の上端を、上の段の実際の下端に合わせる。
+  // 開いた直後（絵文字・文字の読み込み中）・全画面・画面の回転・上の段の高さが変わったときに合わせ直す
+  function fitViews() {
+    const top = Math.max(0, Math.round($("modebar").getBoundingClientRect().bottom)) + "px";
+    for (const v of ["atView", "bmView", "testView"]) $(v).style.top = top;
+  }
+  document.addEventListener("fullscreenchange", fitViews);
+  window.addEventListener("resize", fitViews);
+  if (window.ResizeObserver) new ResizeObserver(fitViews).observe($("modebar"));
 
   // モード切り替え：autotube（web.py、既定ポート 8766）の画面を iframe で全体に出す。合言葉は共通
   const AUTOTUBE_PORT = location.protocol === "https:" ? 8776 : 8766;  // HTTPS のページの中に http のページは出せない
@@ -228,16 +233,16 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
-    if (mode === "test") { $("testView").style.top = $("modebar").offsetHeight + "px"; chatSig = ""; setTimeout(chatRefresh, 0); }
+    if (mode === "test") { fitViews(); chatSig = ""; setTimeout(chatRefresh, 0); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {
-      $("atView").style.top = $("modebar").offsetHeight + "px";
+      fitViews();
       if (!$("atFrame").src) {
         $("atFrame").src = `${location.protocol}//${location.hostname}:${AUTOTUBE_PORT}/?t=${encodeURIComponent(token)}`;
       }
     }
     if (mode === "bm") {  // テレビの Brave のブックマーク（autotube の /bookmarks）。開くたびに読み直す
-      $("bmView").style.top = $("modebar").offsetHeight + "px";
+      fitViews();
       $("bmFrame").src = `${location.protocol}//${location.hostname}:${AUTOTUBE_PORT}/bookmarks?t=${encodeURIComponent(token)}`;
     }
     try { localStorage.setItem("mode", mode); } catch (e) {}
