@@ -885,6 +885,7 @@ class Handler(BaseHTTPRequestHandler):
                 say_stop()
                 if parts:
                     threading.Thread(target=say_tv, args=(parts,), daemon=True).start()
+                return self._reply(200, b'{"ok": true}', "application/json")  # 画面の側は JSON で読む
             elif path == "/history":  # 会話の最近のやり取り（🤖 の下に出す）。clear なら今の時刻を覚えて、次からそれより後だけ
                 if data.get("clear"):
                     from datetime import datetime, timezone
