@@ -753,7 +753,30 @@ say_gen = 0  # テレビで読む（/say）の世代。新しく読むか止め�
 say_proc = None
 
 
+CLIENT_LOG = Path.home() / ".local/state/phone-input/client.log"  # 画面とサーバーの裏で起きたエラーの記録（Claude が読む）
+
+
+def client_log(rec):
+    """client.log に 1 行（JSON）。1MB を超えたら .log.1 に回す"""
+    try:
+        CLIENT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        if CLIENT_LOG.exists() and CLIENT_LOG.stat().st_size > 1_000_000:
+            CLIENT_LOG.replace(CLIENT_LOG.with_suffix(".log.1"))
+        with open(CLIENT_LOG, "a") as fh:
+            fh.write(json.dumps({"t": time.strftime("%Y-%m-%d %H:%M:%S"), **rec}, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
 def say_tv(parts):
+    """テレビで読む（失敗はサーバーの裏で起きて画面には届かないので、client.log に残す）"""
+    try:
+        _say_tv(parts)
+    except Exception as e:
+        client_log({"kind": "tts-tv", "msg": f"{type(e).__name__}: {e}", "mode": "server", "last": "/say"})
+
+
+def _say_tv(parts):
     """[{text, speaker}] を順にテレビのスピーカー（PipeWire の既定の出力）で鳴らす。鳴らしている間に次を作る"""
     global say_gen, say_proc
     say_gen += 1
@@ -914,14 +937,8 @@ class Handler(BaseHTTPRequestHandler):
                 subprocess.run(["dtach", "-p", sock], input=key, check=True)
                 return self._reply(200, b'{"ok": true}', "application/json")  # 画面の側は JSON で読む
             elif path == "/clientlog":  # 画面で起きたエラーの記録（Claude が読んで追いかける）。1MB を超えたら .1 に回す
-                log = Path.home() / ".local/state/phone-input/client.log"
-                log.parent.mkdir(parents=True, exist_ok=True)
-                if log.exists() and log.stat().st_size > 1_000_000:
-                    log.replace(log.with_suffix(".log.1"))
-                rec = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), **{k: str(data.get(k, ""))[:2000] for k in ("kind", "msg", "mode", "last")},
-                       "ua": self.headers.get("User-Agent", "")[:120]}
-                with open(log, "a") as fh:
-                    fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                client_log({**{k: str(data.get(k, ""))[:2000] for k in ("kind", "msg", "mode", "last")},
+                            "ua": self.headers.get("User-Agent", "")[:120]})
                 return self._reply(200, b'{"ok": true}', "application/json")
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
                 text = str(data.get("text", "")).strip()[:500]
