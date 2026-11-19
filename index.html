@@ -72,6 +72,8 @@
   #chat .c { align-self: flex-start; background: #262a33; color: #eee; }
   #chat .c.mid { opacity: .6; font-size: 12px; }
   #chat .busy { align-self: flex-start; color: #aaa; font-size: 12px; }
+  #clStatus { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  #clStatus b { color: #eee; } #clStatus .att { color: #f0c040; }
   .tnote { color: #999; font-size: 13px; margin: 0; }
   #voText { min-height: 3em; font-size: 18px; color: #ddd; white-space: pre-wrap; }
   #qr { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.85);
@@ -129,6 +131,7 @@
     <label><input type="checkbox" id="voJump"> 端末へ切替</label>
   </div>
   <div class="vorow"><button id="voLast">🔁 最後の返事</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 クリア</button></div>
+  <div id="clStatus" class="tnote"></div>
   <div id="voText"></div>
   <div id="voReply" class="tnote"></div>
   <div id="chat"></div>
@@ -373,6 +376,14 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (!document.body.classList.contains("test") || document.hidden) return;
     let h;
     try { h = await postJson("/history", { n: 30 }); } catch (e) { return; }
+    // 状態（Board と同じ claude-tasks）：この Claude を先頭に太字、ほかは場所と状態。返事待ち（許可・入力・質問）は黄色
+    const st = h.status || [];
+    const stHtml = st.sort((a, b) => b.me - a.me).map((r) => {
+      const cls = ["reply"].includes(r.state) ? "att" : "";
+      const name = r.me ? "<b>この Claude</b>" : r.disp.replace(/^~\/work\//, "");
+      return `<span class="${cls}">${name} ${r.mark}${r.label}</span>`;
+    }).join("");
+    if ($("clStatus").innerHTML !== stHtml) $("clStatus").innerHTML = stHtml;
     const sig = h.items.length + ":" + (h.items.length ? h.items[h.items.length - 1].t : "") + ":" + h.working;
     if (sig === chatSig) return;
     chatSig = sig;

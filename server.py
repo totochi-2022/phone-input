@@ -558,6 +558,31 @@ def claude_history(n=30):
     return {"items": items[-n:], "working": working}
 
 
+GLYPH_JA = {"⏳": "作業中", "🔒": "許可待ち", "⌨": "入力待ち", "❓": "質問あり", "🔔": "終わった", "💤": "待機", "🌙": "裏で動作"}
+
+
+def claude_status():
+    """claude-tasks list（Board と同じ）から Claude の状態。[{dir, disp, mark, label, state, me}]（止まっているものは除く）"""
+    tasks = Path.home() / ".claude_plugin/scripts/claude-tasks"
+    if not tasks.exists():
+        return []
+    try:
+        out = subprocess.run([str(tasks), "list"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    me = str(CLAUDE_PROJ.name).lstrip("-").replace("-", "/")
+    rows = []
+    for line in out.splitlines():
+        f = line.split("\t")
+        if len(f) < 5 or f[4] == "off":
+            continue
+        mark = f[0].replace("●", "").replace("○", "")
+        label = next((v for k, v in GLYPH_JA.items() if k in mark), "動作中")
+        rows.append({"dir": f[2], "disp": f[1], "mark": mark or "●", "label": label, "state": f[4],
+                     "me": f[2].strip("/") == me})
+    return rows
+
+
 def speakable(md):
     """Markdown を読み上げ向けに：コード・URL・表の区切り・記号を省く"""
     import re
@@ -732,8 +757,9 @@ class Handler(BaseHTTPRequestHandler):
                     from datetime import datetime, timezone
                     CHAT_CUTOFF.parent.mkdir(parents=True, exist_ok=True)
                     CHAT_CUTOFF.write_text(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
-                return self._reply(200, json.dumps(claude_history(int(data.get("n", 30))), ensure_ascii=False).encode(),
-                                   "application/json")
+                h = claude_history(int(data.get("n", 30)))
+                h["status"] = claude_status()
+                return self._reply(200, json.dumps(h, ensure_ascii=False).encode(), "application/json")
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
                 text = str(data.get("text", "")).strip()[:500]
                 if not text:
