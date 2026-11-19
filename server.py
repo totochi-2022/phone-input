@@ -775,6 +775,31 @@ def claude_prompt():
             "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
 
 
+def claude_leftover():
+    """入力欄に打ちかけの文（普通の色、おすすめではない）が残っていればその文。続けて送ると後ろにつながって一緒に送られる"""
+    import re
+    pane = claude_pane()
+    if not pane:
+        return None
+    try:
+        raw = subprocess.run(["tmux", "capture-pane", "-p", "-e", "-t", pane], capture_output=True, text=True,
+                             timeout=3).stdout.split("\n")
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    plain = [re.sub(r"\x1b\[[0-9;]*m", "", ln) for ln in raw]
+    for i in range(len(plain) - 1, 0, -1):
+        if plain[i].lstrip().startswith("❯") and set(plain[i - 1].strip()) <= set("─") and plain[i - 1].strip():
+            text = plain[i].lstrip()[1:].strip()
+            if not text:
+                return None
+            m = re.match(r"^((?:\x1b\[[0-9;]*m|\s)*)", raw[i].split("❯", 1)[1])
+            codes = m.group(1) if m else ""
+            if re.search(r"\x1b\[(2|38;5;24\d|90)m", codes) or "\x1b[2;" in codes:
+                return None  # 薄い字＝おすすめ・案内
+            return text
+    return None
+
+
 def claude_suggestion():
     """入力欄に薄い字で出ているおすすめ（次に頼む文の候補）。自分で打ちかけの文（普通の色）や、無ければ None。
     入力欄＝横線にはさまれた「❯ 」の行。おすすめは灰色（38;5;24x）か薄い（2m）の字で出る"""
@@ -1002,6 +1027,10 @@ class Handler(BaseHTTPRequestHandler):
                 sock = claude_sock()
                 if not sock:
                     return self._reply(500, "常駐の Claude が見つかりません".encode())
+                left = claude_leftover()
+                if left:  # 打ちかけの文があると後ろにつながって一緒に送られる（/compact の後ろに次の頼みごとが付いたことがある）
+                    return self._reply(409, ("端末の入力欄に打ちかけの文が残っています：「" + left[:60] +
+                                             "」。端末で消すか送ってから、もう一度").encode())
                 since = time.time()
                 # 文字と Enter を分けて送る（一緒に送ると貼り付けの扱いになり、送信されないことがある）。操作キーは Ctrl+X Ctrl+S だけ
                 subprocess.run(["dtach", "-p", sock], input=text.encode(), check=True)
