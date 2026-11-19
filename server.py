@@ -856,8 +856,11 @@ class Handler(BaseHTTPRequestHandler):
                 text = " ".join(str(data.get("text", "")).split())  # 改行は空白に（途中で送信されないように）
                 if not text:
                     return self._reply(400, b"empty")
-                if not data.get("plain"):  # plain＝おすすめをそのまま送るとき（音声ではないので印を付けない）
-                    text = "🎤 " + text  # 音声入力の印（Claude が聞き間違いを音の似た言葉として読み替えられるように）
+                # 印：🎤＝音声入力（Claude が聞き間違いを音の似た言葉として読み替える）。plain＝おすすめをそのまま送るとき（🎤 なし）。
+                # 🔊＝返事をずんだもんが読む（Claude は返事の最初に「🔊 」で始まる短い要約を書き、読み上げはそこだけ読む）
+                mark = ("" if data.get("plain") else "🎤") + ("🔊" if data.get("speak") else "")
+                if mark:
+                    text = mark + " " + text
                 sock = claude_sock()
                 if not sock:
                     return self._reply(500, "常駐の Claude が見つかりません".encode())
@@ -872,8 +875,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._reply(200, json.dumps({"since": since}).encode(), "application/json")
             elif path == "/reply":  # /claude で頼んだあとの Claude の返事（読み上げ向けに整えたもの）。まだなら text は null
                 text = claude_reply(float(data.get("since", 0)))
-                return self._reply(200, json.dumps({"text": text and speakable(text)}, ensure_ascii=False).encode(),
-                                   "application/json")
+                if text:  # 「🔊 」で始まる行（読み上げ用の要約）があればそこだけ読む
+                    summary = [ln.strip().lstrip("🔊").strip() for ln in text.splitlines() if ln.strip().startswith("🔊")]
+                    text = speakable("\n".join(summary) if summary else text)
+                return self._reply(200, json.dumps({"text": text}, ensure_ascii=False).encode(), "application/json")
             elif path == "/say":  # テレビのスピーカーで読む。parts が空なら止める
                 parts = [{"text": str(p.get("text", ""))[:500], "speaker": int(p.get("speaker", ZUNDAMON))}
                          for p in data.get("parts", []) if str(p.get("text", "")).strip()]

@@ -322,7 +322,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     });
   }
   async function askClaude(text) {
-    const r = await postJson("/claude", { text, jump: $("voJump").checked });
+    const r = await postJson("/claude", { text, jump: $("voJump").checked, speak: $("voSpeak").checked });
     if ($("voSpeak").checked) waitReply(r.since);
   }
   $("voClaude").onclick = () => voListen($("voClaude"), askClaude);
@@ -483,7 +483,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     const text = $("clSuggest").dataset.text; if (!text) return;
     $("clSuggest").disabled = true;
     try {
-      const r = await postJson("/claude", { text, plain: true, jump: $("voJump").checked });
+      const r = await postJson("/claude", { text, plain: true, jump: $("voJump").checked, speak: $("voSpeak").checked });
       $("voText").textContent = "送りました：" + text;
       if ($("voSpeak").checked) waitReply(r.since);
     } catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
