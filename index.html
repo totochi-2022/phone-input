@@ -212,6 +212,22 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 <script>
   const token = new URLSearchParams(location.search).get("t") || "";
   try { if (token) localStorage.setItem("token", token); } catch (e) {}  // 共有（/share）で使う
+  // 画面で起きたエラーをサーバーの記録（~/.local/state/phone-input/client.log）に送る。Claude が読んで追いかけられるように。
+  // 一緒に、どの画面にいたか・最後に押したボタンも残す。送れなくても何もしない
+  let lastAction = "";
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button, input, label");
+    if (b) lastAction = (b.id ? "#" + b.id + " " : "") + (b.textContent || b.value || "").trim().slice(0, 40);
+  }, true);
+  function clog(kind, msg) {
+    try {
+      const mode = ["at", "bm", "test"].find((m) => document.body.classList.contains(m)) || "input";
+      fetch("/clientlog", { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
+        body: JSON.stringify({ kind, msg: String(msg).slice(0, 2000), mode, last: lastAction }) }).catch(() => {});
+    } catch (e) {}
+  }
+  window.addEventListener("error", (e) => clog("js", `${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno}:${e.colno})`));
+  window.addEventListener("unhandledrejection", (e) => clog("promise", (e.reason && (e.reason.stack || e.reason.message)) || e.reason));
   // アプリ（ホーム画面に追加）として入れられるように：manifest は合言葉付きで読ませる（開くページにも合言葉が付く）。HTTPS のときだけ
   if (window.isSecureContext && token) {
     const m = document.createElement("link");
@@ -313,7 +329,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     btn.classList.add("rec"); $("voText").textContent = "聞いています…";
     voRec = listenLong({
       onText: (t) => { const v = $("voText"); v.textContent = t; v.scrollTop = v.scrollHeight; },  // 長くなったら最新の所を見せる
-      onError: (err) => { $("voText").textContent = "聞き取れませんでした（" + err + "）"; },
+      onError: (err) => { clog("speech", err); $("voText").textContent = "聞き取れませんでした（" + err + "）"; },
       onDone: async (text) => {
         btn.classList.remove("rec"); voRec = null;
         if (!text) return;
@@ -330,10 +346,12 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 
   // 返事の読み上げ：/reply で Claude の返事が来るまで待ち、/tts（VOICEVOX のずんだもん）で文ごとに声にして順に鳴らす
   async function postJson(path, body) {
-    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
-                                  body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
+                                    body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+      return await r.json();
+    } catch (e) { clog("send", `${path}: ${e.message}`); throw e; }
   }
   let voGen = 0, voAudio = null;
   function voStop() { voGen++; if (voAudio) { voAudio.pause(); voAudio = null; } if (voOut() === "tv") post("/say", { parts: [] }).catch(() => {}); }
@@ -380,7 +398,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     let next = parts.length ? tts(parts[0]) : null;
     for (let i = 0; i < parts.length && gen === voGen; i++) {
       let url;
-      try { url = await next; } catch (e) { $("voReply").textContent = "声にできませんでした：" + e.message + "\n\n" + text; return; }
+      try { url = await next; } catch (e) { clog("tts", e.message); $("voReply").textContent = "声にできませんでした：" + e.message + "\n\n" + text; return; }
       next = i + 1 < parts.length ? tts(parts[i + 1]) : null;  // 鳴らしている間に次を作る
       if (gen !== voGen) return;
       await new Promise((ok) => { voAudio = new Audio(url); voAudio.onended = voAudio.onerror = ok; voAudio.play().catch(ok); });
@@ -522,7 +540,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     $("mic").classList.add("rec"); status("聞いています…");
     micRec = listenLong({
       onText: (t) => { ta.value = head + t + tail; fitText(); },
-      onError: (err) => status("聞き取れませんでした（" + err + "）"),
+      onError: (err) => { clog("speech", err); status("聞き取れませんでした（" + err + "）"); },
       onDone: (text) => {
         $("mic").classList.remove("rec"); micRec = null;
         ta.value = head + text + tail; fitText();
@@ -560,9 +578,11 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   }
 
   async function post(path, body) {
-    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
-                                  body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(await r.text());
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
+                                    body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    } catch (e) { if (path !== "/clientlog") clog("send", `${path}: ${e.message}`); throw e; }
   }
 
   // 送る前に入力欄を空にして、自動送信の待ちも取り消す（二重送信を防ぐ）

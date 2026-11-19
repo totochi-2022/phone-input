@@ -913,6 +913,16 @@ class Handler(BaseHTTPRequestHandler):
                     key = str(n).encode()
                 subprocess.run(["dtach", "-p", sock], input=key, check=True)
                 return self._reply(200, b'{"ok": true}', "application/json")  # 画面の側は JSON で読む
+            elif path == "/clientlog":  # 画面で起きたエラーの記録（Claude が読んで追いかける）。1MB を超えたら .1 に回す
+                log = Path.home() / ".local/state/phone-input/client.log"
+                log.parent.mkdir(parents=True, exist_ok=True)
+                if log.exists() and log.stat().st_size > 1_000_000:
+                    log.replace(log.with_suffix(".log.1"))
+                rec = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), **{k: str(data.get(k, ""))[:2000] for k in ("kind", "msg", "mode", "last")},
+                       "ua": self.headers.get("User-Agent", "")[:120]}
+                with open(log, "a") as fh:
+                    fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                return self._reply(200, b'{"ok": true}', "application/json")
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
                 text = str(data.get("text", "")).strip()[:500]
                 if not text:
