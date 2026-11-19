@@ -79,7 +79,11 @@
   #clTasks[hidden] { display: none; }
   #chat details.tools { align-self: flex-start; max-width: 92%; font-size: 12px; color: #9ab; }
   #chat details.tools summary { cursor: pointer; padding: 2px 4px; }
-  #chat .tool { margin: 4px 0 8px 10px; border-left: 2px solid #345; padding-left: 8px; }
+  #chat .tool { margin: 2px 0 2px 10px; border-left: 2px solid #345; padding-left: 8px; }
+  #chat .tool[open] { margin-bottom: 8px; }
+  #chat .tool summary.th { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #chat .tool[open] summary.th { white-space: normal; }
+  #chat .tool .tw { color: #888; margin: 3px 0; }
   #chat .tool.err { border-left-color: #a44; }
   #chat .tool .th { color: #cde; }
   #chat .tool pre { white-space: pre-wrap; word-break: break-all; margin: 3px 0; padding: 4px 6px; border-radius: 4px; font-size: 11px; max-height: 30vh; overflow: auto; }
@@ -533,13 +537,16 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     const sm = document.createElement("summary");
     sm.textContent = `🔧 ${tools.length} 件の${what}${running ? "（実行中）" : ""}`;
     det.appendChild(sm);
-    for (const t of tools) {
-      const row = document.createElement("div"); row.className = "tool" + (t.err ? " err" : "");
-      const hd = document.createElement("div"); hd.className = "th";
+    for (const t of tools) {  // 2 段目：1 件ずつ 1 行（印・道具・説明）。押すとその中身と出力
+      const row = document.createElement("details"); row.className = "tool" + (t.err ? " err" : "");
+      row.open = toolsOpen.has(t.id);
+      row.ontoggle = () => { row.open ? toolsOpen.add(t.id) : toolsOpen.delete(t.id); };
+      const hd = document.createElement("summary"); hd.className = "th";
       hd.textContent = `${t.out === null ? "⏳" : t.err ? "✗" : "✓"} ${t.name}：${t.desc}${t.bg ? "（裏で実行）" : ""}`;
       row.appendChild(hd);
       if (t.body) row.appendChild(codeEl(t.body, "tb", t.name === "Bash" ? "bash" : null));
       if (t.out) row.appendChild(codeEl(t.out, "to", "auto"));
+      else if (t.out === null) { const w = document.createElement("div"); w.className = "tw"; w.textContent = "実行中…"; row.appendChild(w); }
       det.appendChild(row);
     }
     return det;
