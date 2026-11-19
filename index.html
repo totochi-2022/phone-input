@@ -73,6 +73,13 @@
   #chat .c.mid { opacity: .6; font-size: 12px; }
   #chat .busy { align-self: flex-start; color: #aaa; font-size: 12px; }
   #clStatus { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  #clPrompt:empty { display: none; }
+  #clPrompt { border: 2px solid #f0c040; border-radius: 10px; padding: 6px 8px; background: #2a2614; }
+  #clPrompt pre { margin: 0 0 6px; font-size: 11px; line-height: 1.35; white-space: pre-wrap; word-break: break-all;
+                  max-height: 28vh; overflow: auto; color: #eee; }
+  #clPrompt .ans { display: flex; flex-direction: column; gap: 5px; }
+  #clPrompt .ans button { text-align: left; padding: 9px 10px; font-size: 14px; }
+  #clPrompt .ans button.no { background: #5a2a2a; }
   #clStatus b { color: #eee; } #clStatus .att { color: #f0c040; }
   .tnote { color: #999; font-size: 13px; margin: 0; }
   #voText { min-height: 3em; font-size: 18px; color: #ddd; white-space: pre-wrap; }
@@ -132,6 +139,7 @@
   </div>
   <div class="vorow"><button id="voLast">🔁 最後の返事</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 クリア</button></div>
   <div id="clStatus" class="tnote"></div>
+  <div id="clPrompt"></div>
   <div id="voText"></div>
   <div id="voReply" class="tnote"></div>
   <div id="chat"></div>
@@ -384,6 +392,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       return `<span class="${cls}">${name} ${r.mark}${r.label}</span>`;
     }).join("");
     if ($("clStatus").innerHTML !== stHtml) $("clStatus").innerHTML = stHtml;
+    showPrompt(h.prompt);
     const sig = h.items.length + ":" + (h.items.length ? h.items[h.items.length - 1].t : "") + ":" + h.working;
     if (sig === chatSig) return;
     chatSig = sig;
@@ -399,6 +408,37 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (h.working) { const b = document.createElement("div"); b.className = "busy"; b.textContent = "Claude が作業中…"; box.appendChild(b); }
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
+  // 端末に確認（許可・質問）が出ていたら、画面の中身と選択肢のボタンを出す。押すとその番号のキー（断るは Esc）を送る。
+  // サーバーは送る直前に画面を見直し、同じ選択肢がまだ出ているときだけ送る
+  let promptSig = "";
+  function showPrompt(p) {
+    const sig = p ? p.screen + "|" + p.options.map((o) => o.label).join("|") : "";
+    if (sig === promptSig) return;
+    promptSig = sig;
+    const box = $("clPrompt");
+    box.textContent = "";
+    if (!p) return;
+    const pre = document.createElement("pre"); pre.textContent = p.screen; box.appendChild(pre);
+    const ans = document.createElement("div"); ans.className = "ans"; box.appendChild(ans);
+    const labels = p.options.map((o) => o.label);
+    const send = async (body, btn) => {
+      ans.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      try { await postJson("/answer", { ...body, labels }); btn.textContent = "✔ " + btn.textContent; }
+      catch (e) { $("voText").textContent = "答えられませんでした：" + e.message; }
+      setTimeout(() => { promptSig = ""; chatSig = ""; chatRefresh(); }, 800);
+    };
+    for (const o of p.options) {
+      const b = document.createElement("button");
+      b.textContent = `${o.n}. ${o.label}`;
+      if (/^no\b|いいえ|^No,/i.test(o.label)) b.className = "no";
+      b.onclick = () => send({ n: o.n }, b);
+      ans.appendChild(b);
+    }
+    const esc = document.createElement("button"); esc.className = "no"; esc.textContent = "✕ 断る（Esc）";
+    esc.onclick = () => send({ esc: true }, esc); ans.appendChild(esc);
+    if (navigator.vibrate) navigator.vibrate(200);
+  }
+
   // 会話をクリア：今の時点をサーバーに覚えてもらい、次からはそれより後のやり取りだけ出す
   $("chatClear").onclick = async () => {
     if (!confirm("ここまでの会話を表示から消しますか？（会話そのものは消えません）")) return;

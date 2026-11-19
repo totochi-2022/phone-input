@@ -583,6 +583,77 @@ def claude_status():
     return rows
 
 
+def claude_sock():
+    """常駐の Claude（~/work/howm）の dtach のソケット。無ければ空"""
+    tasks = Path.home() / ".claude_plugin/scripts/claude-tasks"
+    if not tasks.exists():
+        return ""
+    sock = subprocess.run([str(tasks), "sock", str(Path.home() / "work/howm")], capture_output=True,
+                          text=True).stdout.strip()
+    return sock if sock and Path(sock).is_socket() else ""
+
+
+def claude_pane():
+    """常駐の Claude が映っている tmux のペイン（そのソケットにつないでいる dtach が中で動いているペイン）"""
+    sock = claude_sock()
+    if not sock:
+        return ""
+    try:
+        panes = subprocess.run(["tmux", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"], capture_output=True,
+                               text=True, timeout=3).stdout.split("\n")
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    children = {}  # 親の pid → 子の pid（/proc から）
+    for st in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            f = st.read_text().rsplit(")", 1)[1].split()
+            children.setdefault(int(f[1]), []).append(int(st.parent.name))
+        except (OSError, IndexError, ValueError):
+            pass
+    for line in panes:
+        if " " not in line:
+            continue
+        pane, pid = line.split(" ", 1)
+        todo = [int(pid)]
+        while todo:
+            p = todo.pop()
+            try:
+                if sock.encode() in Path(f"/proc/{p}/cmdline").read_bytes():
+                    return pane
+            except OSError:
+                pass
+            todo += children.get(p, [])
+    return ""
+
+
+def claude_prompt():
+    """端末に確認（許可・質問）が出ていれば {screen, options:[{n, label}]}、無ければ None。
+    画面の下の部分から「❯ 1. Yes」「  2. …」の形の行を探す"""
+    pane = claude_pane()
+    if not pane:
+        return None
+    try:
+        lines = subprocess.run(["tmux", "capture-pane", "-p", "-J", "-t", pane], capture_output=True, text=True,
+                               timeout=3).stdout.rstrip("\n").split("\n")
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    import re
+    lines = [re.sub(r"[\s│]+$", "", ln) for ln in lines][-40:]
+    opts, first = [], None
+    for i, ln in enumerate(lines):
+        m = re.match(r"^[\s│]*(❯\s*)?(\d)\.\s+(\S.*)$", ln)
+        if m:
+            if first is None:
+                first = i
+            opts.append({"n": int(m.group(2)), "label": m.group(3).strip(), "sel": bool(m.group(1))})
+    # 選択肢は 1 から連番で、選んでいる印（❯）が 1 つあるときだけ確認とみなす（会話の中の番号付きの箇条書きと区別）
+    if len(opts) < 2 or [o["n"] for o in opts] != list(range(1, len(opts) + 1)) or sum(o["sel"] for o in opts) != 1:
+        return None
+    top = max(0, first - 14)  # 選択肢の上の、何をしようとしているかの部分
+    screen = "\n".join(ln for ln in lines[top:] if ln.strip() and not set(ln.strip()) <= set("─━"))
+    return {"screen": screen, "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
+
+
 def speakable(md):
     """Markdown を読み上げ向けに：コード・URL・表の区切り・記号を省く"""
     import re
@@ -728,10 +799,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not text:
                     return self._reply(400, b"empty")
                 text = "🎤 " + text  # 音声入力の印（Claude が聞き間違いを音の似た言葉として読み替えられるように）
-                tasks = Path.home() / ".claude_plugin/scripts/claude-tasks"
-                sock = subprocess.run([str(tasks), "sock", str(Path.home() / "work/howm")], capture_output=True,
-                                      text=True).stdout.strip() if tasks.exists() else ""
-                if not sock or not Path(sock).is_socket():
+                sock = claude_sock()
+                if not sock:
                     return self._reply(500, "常駐の Claude が見つかりません".encode())
                 since = time.time()
                 # 文字と Enter を分けて送る（一緒に送ると貼り付けの扱いになり、送信されないことがある）。操作キーは送らない
@@ -759,7 +828,24 @@ class Handler(BaseHTTPRequestHandler):
                     CHAT_CUTOFF.write_text(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
                 h = claude_history(int(data.get("n", 30)))
                 h["status"] = claude_status()
+                h["prompt"] = claude_prompt()
                 return self._reply(200, json.dumps(h, ensure_ascii=False).encode(), "application/json")
+            elif path == "/answer":  # 端末に出ている確認（許可・質問）に答える。n＝選択肢の番号、esc＝断る
+                # 送る直前に画面を見直し、リモコンに見せた選択肢がまだ出ているときだけ送る（キーは番号か Esc だけ）
+                p = claude_prompt()
+                if not p:
+                    return self._reply(409, "確認はもう出ていません".encode())
+                if [o["label"] for o in p["options"]] != list(data.get("labels", [])):
+                    return self._reply(409, "確認の中身が変わりました。見直してください".encode())
+                sock = claude_sock()
+                if data.get("esc"):
+                    key = b"\x1b"
+                else:
+                    n = int(data.get("n", 0))
+                    if n not in [o["n"] for o in p["options"]]:
+                        return self._reply(400, b"bad option")
+                    key = str(n).encode()
+                subprocess.run(["dtach", "-p", sock], input=key, check=True)
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
                 text = str(data.get("text", "")).strip()[:500]
                 if not text:
