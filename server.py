@@ -562,6 +562,9 @@ class Handler(BaseHTTPRequestHandler):
                 subprocess.run(["dtach", "-p", sock], input=text.encode(), check=True)
                 time.sleep(0.4)
                 subprocess.run(["dtach", "-p", sock], input=b"\r", check=True)
+                wf = Path.home() / ".local/bin/win-focus"  # テレビは端末（ttyd）のタブへ（F7＋T と同じ）
+                if wf.exists():
+                    subprocess.Popen([str(wf), "ttyd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             elif path == "/open":  # 共有（/share）から：テレビの Brave の新しいタブで開く（autotube の openurl）
                 import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8766/api/openurl", method="POST",
