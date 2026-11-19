@@ -93,7 +93,10 @@
   #chat .tool pre code.hljs { padding: 0; background: transparent; }
   #chat .tool pre.to { background: #0c0f14; color: #bbb; }
   #clPrompt:empty { display: none; }
-  .sug[hidden] { display: none; }
+  .sug[hidden], #clCmdRow[hidden] { display: none; }
+  #clCmdRow { display: flex; gap: 6px; }
+  #clCmdRow .cmd { flex: 1 1 auto; background: #2a2440; border-color: #9a7ad0; color: #e4dcff; }
+  #clCmdRow .cmdx { flex: 0 0 auto; padding: 0 12px; }
   .phrow { display: flex; gap: 6px; align-items: center; }
   .phbtn { flex: 0 0 auto; padding: 6px 12px; font-size: 20px; background: #2b3440; border-radius: 8px; cursor: pointer; }
   #phList { flex: 1; display: flex; gap: 4px; overflow-x: auto; min-height: 0; }
@@ -169,6 +172,7 @@
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
   <button id="clSuggest" class="sug" hidden></button>
+  <div id="clCmdRow" hidden><button id="clCmd" class="sug cmd"></button><button id="clCmdX" class="cmdx">✕</button></div>
   <div class="phrow"><label class="phbtn" title="すぐカメラで撮る">📸<input type="file" id="phCam" accept="image/*" capture="environment" hidden></label>
     <label class="phbtn" title="ギャラリーから選ぶ（何枚でも）">📷<input type="file" id="phFile" accept="image/*" multiple hidden></label>
     <div id="phList"></div><button id="phSend" hidden>写真だけ送る</button></div>
@@ -528,6 +532,13 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     const sg = $("clSuggest");
     if (h.suggest) { sg.textContent = "💡 " + h.suggest; sg.dataset.text = h.suggest; sg.hidden = false; sg.disabled = false; }
     else sg.hidden = true;
+    // Claude が勧めた端末のコマンド（/compact など）：押すと送る。作業中は押せない
+    const cr = $("clCmdRow"), cb = $("clCmd");
+    if (h.cmd) {
+      cr.hidden = false; cb.dataset.text = h.cmd.text;
+      cb.textContent = "⌨ " + h.cmd.text + (h.cmd.note ? "　（" + h.cmd.note + "）" : "") + (h.working ? "　…作業が終わったら押せます" : "　← 押すと送る");
+      cb.disabled = !!h.working;
+    } else cr.hidden = true;
     const toolsN = h.items.reduce((a, it) => a + (it.tools ? it.tools.filter((t) => t.out !== null).length * 1000 + it.tools.length : 0), 0);
     const sig = h.items.length + ":" + (h.items.length ? h.items[h.items.length - 1].t : "") + ":" + h.working + ":" + toolsN;
     if (sig === chatSig) return;
@@ -677,6 +688,16 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       $("voText").textContent = "送りました：" + text;
       if ($("voSpeak").checked) waitReply(r.since);
     } catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
+  };
+
+  $("clCmd").onclick = async () => {
+    const text = $("clCmd").dataset.text; if (!text) return;
+    $("clCmd").disabled = true;
+    try { await postJson("/cmd", { text }); $("voText").textContent = "送りました：" + text; $("clCmdRow").hidden = true; }
+    catch (e) { $("voText").textContent = "送れませんでした：" + e.message; $("clCmd").disabled = false; }
+  };
+  $("clCmdX").onclick = async () => {
+    try { await postJson("/cmd", { drop: true }); $("clCmdRow").hidden = true; } catch (e) { $("voText").textContent = e.message; }
   };
 
   // 会話をクリア：今の時点をサーバーに覚えてもらい、次からはそれより後のやり取りだけ出す

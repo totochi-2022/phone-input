@@ -1,0 +1,8 @@
+#!/bin/sh
+# Claude が端末のコマンド（/compact など）をリモコンに勧める。リモコンの Claude のページに出て、押すと送られる
+# 使い方: propose "/compact 残してほしいこと" ["説明"]
+case "$1" in /*) ;; *) echo "コマンドは / で始めて" >&2; exit 1;; esac
+f=~/.local/state/phone-input/proposed-cmd.json
+mkdir -p "$(dirname "$f")"
+python3 -c 'import json,sys,time; print(json.dumps({"text":sys.argv[1],"note":sys.argv[2] if len(sys.argv)>2 else "","t":time.time()},ensure_ascii=False))' "$@" > "$f"
+echo "リモコンに出しました: $1"

@@ -507,6 +507,17 @@ def claude_reply(since):
 
 
 CHAT_CUTOFF = Path.home() / ".local/state/phone-input/chat-cutoff"  # 「会話をクリア」した時刻（ISO）。これより後だけ出す
+CMD_FILE = Path.home() / ".local/state/phone-input/proposed-cmd.json"  # Claude が勧める端末のコマンド（/compact など）。リモコンで押すと送る
+
+
+def proposed_cmd():
+    try:
+        c = json.loads(CMD_FILE.read_text())
+        if time.time() - c.get("t", 0) < 3600 and str(c.get("text", "")).startswith("/"):
+            return c
+    except (OSError, ValueError):
+        pass
+    return None
 
 
 def _clip(t, head=700, tail=300):
@@ -1063,7 +1074,29 @@ class Handler(BaseHTTPRequestHandler):
                 h["sl"] = claude_statusline()
                 h["prompt"] = claude_prompt()
                 h["suggest"] = None if h["prompt"] or h["working"] else claude_suggestion()
+                h["cmd"] = proposed_cmd()
                 return self._reply(200, json.dumps(h, ensure_ascii=False).encode(), "application/json")
+            elif path == "/cmd":  # Claude が勧めたコマンドを送る（run）か取り下げる（drop）。作業中は送らない（入力欄に残って次の文とつながる）
+                c = proposed_cmd()
+                if data.get("drop") or not c:
+                    CMD_FILE.unlink(missing_ok=True)
+                    return self._reply(200, b'{"ok":true}', "application/json") if data.get("drop") else \
+                        self._reply(409, "コマンドはもうありません".encode())
+                if c["text"] != data.get("text"):
+                    return self._reply(409, "コマンドが変わりました。見直してください".encode())
+                if claude_history(1).get("working"):
+                    return self._reply(409, "Claude が作業中です。終わってから押してください".encode())
+                left = claude_leftover()
+                if left:
+                    return self._reply(409, ("端末の入力欄に打ちかけの文が残っています：「" + left[:60] + "」").encode())
+                sock = claude_sock()
+                if not sock:
+                    return self._reply(500, "常駐の Claude が見つかりません".encode())
+                subprocess.run(["dtach", "-p", sock], input=" ".join(c["text"].split()).encode(), check=True)
+                time.sleep(0.4)
+                subprocess.run(["dtach", "-p", sock], input=b"\r", check=True)
+                CMD_FILE.unlink(missing_ok=True)
+                return self._reply(200, b'{"ok":true}', "application/json")
             elif path == "/answer":  # 端末に出ている確認（許可・質問）に答える。n＝選択肢の番号、esc＝断る
                 # 送る直前に画面を見直し、リモコンに見せた選択肢がまだ出ているときだけ送る（キーは番号か Esc だけ）
                 p = claude_prompt()
