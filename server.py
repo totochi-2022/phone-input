@@ -647,7 +647,15 @@ def claude_prompt():
                 first = i
             opts.append({"n": int(m.group(2)), "label": m.group(3).strip(), "sel": bool(m.group(1))})
     # 選択肢は 1 から連番で、選んでいる印（❯）が 1 つあるときだけ確認とみなす（会話の中の番号付きの箇条書きと区別）
-    if len(opts) < 2 or [o["n"] for o in opts] != list(range(1, len(opts) + 1)) or sum(o["sel"] for o in opts) != 1:
+    ok = len(opts) >= 2 and [o["n"] for o in opts] == list(range(1, len(opts) + 1)) and sum(o["sel"] for o in opts) == 1
+    # 調べ用の記録：確認らしい画面（選択肢か「Do you want」がある）を、見つけたか・見つけられなかったかと一緒に残す
+    if opts or any("Do you want" in ln for ln in lines):
+        try:
+            with open(Path.home() / ".local/state/phone-input/prompt-debug.log", "a") as fh:
+                fh.write(f"===== {time.strftime('%H:%M:%S')} {'OK' if ok else 'NG'} {opts}\n" + "\n".join(lines[-25:]) + "\n")
+        except OSError:
+            pass
+    if not ok:
         return None
     top = max(0, first - 14)  # 選択肢の上の、何をしようとしているかの部分
     screen = "\n".join(ln for ln in lines[top:] if ln.strip() and not set(ln.strip()) <= set("─━"))
@@ -876,6 +884,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self._reply(400, b"bad option")
                     key = str(n).encode()
                 subprocess.run(["dtach", "-p", sock], input=key, check=True)
+                return self._reply(200, b'{"ok": true}', "application/json")  # 画面の側は JSON で読む
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
                 text = str(data.get("text", "")).strip()[:500]
                 if not text:
