@@ -246,37 +246,50 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
 
   // 試し：音声認識（Chrome の Web Speech API、HTTPS のときだけ使える）で聞き取って、テレビに打つ（/type）か、常駐の Claude に頼む（/claude）
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  // 間を待つ：区切りごとに終わらず（continuous）、話し終わってから SILENCE_MS 黙ったら終わる。何も話さなければ 8 秒で終わる
-  const SILENCE_MS = 2500;
-  function silenceStop(r) {
-    let t = setTimeout(() => r.stop(), 8000);
-    return () => { clearTimeout(t); t = setTimeout(() => r.stop(), SILENCE_MS); };
+  // 長めに聞く：話し終わってから SILENCE_MS 黙ったら終わる（何も話さなければ 8 秒）。Android の Chrome は continuous でも
+  // 少し黙ると自分で止まるので、そのときは聞き直して続ける。stop() でその場で終わる
+  const SILENCE_MS = 4000;
+  function listenLong({ onText, onDone, onError }) {
+    let final = "", done = false, rec = null, timer = null;
+    const arm = (ms) => { clearTimeout(timer); timer = setTimeout(() => { done = true; if (rec) rec.stop(); }, ms); };
+    function startOne() {
+      const r = rec = new SR();
+      r.lang = "ja-JP"; r.interimResults = true; r.continuous = true;
+      let sess = "";
+      r.onresult = (e) => {
+        arm(SILENCE_MS);
+        let interim = ""; sess = "";
+        for (let i = 0; i < e.results.length; i++) {
+          if (e.results[i].isFinal) sess += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
+        }
+        onText(final + sess + interim);
+      };
+      r.onerror = (e) => { if (e.error !== "no-speech" && e.error !== "aborted") { done = true; onError(e.error); } };
+      r.onend = () => {
+        final += sess;
+        if (done) { clearTimeout(timer); onDone(final.trim()); return; }
+        try { startOne(); } catch (err) { done = true; onDone(final.trim()); }
+      };
+      r.start();
+    }
+    arm(8000); startOne();
+    return { stop() { done = true; if (rec) rec.stop(); } };
   }
   let voRec = null;
   function voListen(btn, deliver) {
     if (!SR) { $("voText").textContent = "このブラウザでは音声認識が使えません（HTTPS のアプリで開く）"; return; }
     if (voRec) { voRec.stop(); return; }  // 話している途中でもう一度押したら、そこで終わる
-    const r = voRec = new SR();
-    r.lang = "ja-JP"; r.interimResults = true; r.continuous = true;
-    const heard = silenceStop(r);
-    let final = "";
     btn.classList.add("rec"); $("voText").textContent = "聞いています…";
-    r.onresult = (e) => {
-      heard();
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
-      }
-      $("voText").textContent = final + interim;
-    };
-    r.onerror = (e) => { $("voText").textContent = "聞き取れませんでした（" + e.error + "）"; };
-    r.onend = async () => {
-      btn.classList.remove("rec"); voRec = null;
-      if (!final.trim()) return;
-      try { await deliver(final.trim()); $("voText").textContent = "送りました：" + final.trim(); }
-      catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
-    };
-    r.start();
+    voRec = listenLong({
+      onText: (t) => { $("voText").textContent = t; },
+      onError: (err) => { $("voText").textContent = "聞き取れませんでした（" + err + "）"; },
+      onDone: async (text) => {
+        btn.classList.remove("rec"); voRec = null;
+        if (!text) return;
+        try { await deliver(text); $("voText").textContent = "送りました：" + text; }
+        catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
+      },
+    });
   }
   $("voTv").onclick = () => voListen($("voTv"), (text) => post("/type", { text, enter: $("voEnter").checked }));
   $("voClaude").onclick = () => voListen($("voClaude"), async (text) => {
@@ -361,27 +374,17 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
   $("mic").onclick = () => {
     if (!SR) return status("このブラウザでは音声認識が使えません（HTTPS のアプリで開く）");
     if (micRec) { micRec.stop(); return; }
-    const r = micRec = new SR();
-    r.lang = "ja-JP"; r.interimResults = true; r.continuous = true;
-    const heard = silenceStop(r);
     const before = $("text").value;
-    let final = "";
     $("mic").classList.add("rec"); status("聞いています…");
-    r.onresult = (e) => {
-      heard();
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
-      }
-      $("text").value = before + final + interim; fitText();
-    };
-    r.onerror = (e) => status("聞き取れませんでした（" + e.error + "）");
-    r.onend = () => {
-      $("mic").classList.remove("rec"); micRec = null;
-      $("text").value = before + final; fitText();
-      if (final.trim()) $("send").onclick();
-    };
-    r.start();
+    micRec = listenLong({
+      onText: (t) => { $("text").value = before + t; fitText(); },
+      onError: (err) => status("聞き取れませんでした（" + err + "）"),
+      onDone: (text) => {
+        $("mic").classList.remove("rec"); micRec = null;
+        $("text").value = before + text; fitText();
+        if (text) $("send").onclick();
+      },
+    });
   };
 
   // QR コード：スマホで開く URL（LAN 側 IP ＋合言葉）を表示する。ライブラリは押したときに読み込む
