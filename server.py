@@ -506,6 +506,49 @@ def claude_reply(since):
     return None
 
 
+def claude_history(n=30):
+    """会話の最近のやり取り [{who: "user"|"claude", text, final, t}]（新しいものが最後）。working＝Claude が作業中か"""
+    files = sorted(CLAUDE_PROJ.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
+    if not files:
+        return {"items": [], "working": False}
+    f = files[-1]
+    with open(f, "rb") as fh:
+        fh.seek(max(0, f.stat().st_size - 4_000_000))
+        lines = fh.read().splitlines()
+    items, working = [], False
+    for line in lines:
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("isSidechain") or d.get("isMeta") or d.get("isCompactSummary"):
+            continue
+        m = d.get("message") or {}
+        c = m.get("content")
+        if d.get("type") == "user":
+            if isinstance(c, str):
+                text = c
+            elif isinstance(c, list):
+                if any(x.get("type") == "tool_result" for x in c):
+                    continue  # ツールの結果（作業の途中）
+                text = "".join(x.get("text", "") for x in c if x.get("type") == "text")
+            else:
+                continue
+            text = text.strip()
+            if not text or text.startswith("<"):
+                continue  # コマンドや仕組みの通知
+            items.append({"who": "user", "text": text[:2000], "t": d.get("timestamp")})
+            working = True
+        elif d.get("type") == "assistant" and isinstance(c, list):
+            text = "".join(x.get("text", "") for x in c if x.get("type") == "text").strip()
+            final = m.get("stop_reason") == "end_turn"
+            if final:
+                working = False
+            if text:
+                items.append({"who": "claude", "text": text[:6000], "final": final, "t": d.get("timestamp")})
+    return {"items": items[-n:], "working": working}
+
+
 def speakable(md):
     """Markdown を読み上げ向けに：コード・URL・表の区切り・記号を省く"""
     import re
@@ -675,6 +718,9 @@ class Handler(BaseHTTPRequestHandler):
                 say_stop()
                 if parts:
                     threading.Thread(target=say_tv, args=(parts,), daemon=True).start()
+            elif path == "/history":  # 会話の最近のやり取り（🧪 の下に出す）
+                return self._reply(200, json.dumps(claude_history(int(data.get("n", 30))), ensure_ascii=False).encode(),
+                                   "application/json")
             elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
                 text = str(data.get("text", "")).strip()[:500]
                 if not text:

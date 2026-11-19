@@ -58,6 +58,12 @@
   .vo.rec { background: #c0392b; color: #fff; }
   .vorow { display: flex; gap: 8px; } .vorow button { flex: 1; padding: 12px 6px; }
   #voReply { white-space: pre-wrap; max-height: 40vh; overflow: auto; }
+  #chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 20px; }
+  #chat .m { white-space: pre-wrap; word-break: break-word; padding: 8px 10px; border-radius: 10px; font-size: 14px; line-height: 1.45; max-width: 92%; }
+  #chat .u { align-self: flex-end; background: #2a5bd7; color: #fff; }
+  #chat .c { align-self: flex-start; background: #262a33; color: #eee; }
+  #chat .c.mid { opacity: .6; font-size: 12px; }
+  #chat .busy { align-self: flex-start; color: #aaa; font-size: 12px; }
   .tnote { color: #999; font-size: 13px; margin: 0; }
   #voText { min-height: 3em; font-size: 18px; color: #ddd; white-space: pre-wrap; }
   #qr { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.85);
@@ -118,6 +124,7 @@
   <div class="vorow"><button id="voLast">🔁 最後の返事を読む</button><button id="voStop">⏹ 止める</button></div>
   <div id="voText"></div>
   <div id="voReply" class="tnote"></div>
+  <div id="chat"></div>
 </div>
 <div id="inputView">
 <div class="kpanel" id="pJa">
@@ -214,6 +221,7 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
+    if (mode === "test") { chatSig = ""; setTimeout(chatRefresh, 0); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {
       $("atView").style.top = $("modebar").offsetHeight + "px";
@@ -358,6 +366,30 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       URL.revokeObjectURL(url);
     }
   }
+  // 会話のやり取り（常駐の Claude の記録）を下に出す。🧪 を開いている間 3 秒ごと。新しく増えたら下までスクロール
+  var chatSig = "";  // var：起動時の setMode（この行より前）からも触るため
+  async function chatRefresh() {
+    if (!document.body.classList.contains("test") || document.hidden) return;
+    let h;
+    try { h = await postJson("/history", { n: 30 }); } catch (e) { return; }
+    const sig = h.items.length + ":" + (h.items.length ? h.items[h.items.length - 1].t : "") + ":" + h.working;
+    if (sig === chatSig) return;
+    chatSig = sig;
+    const box = $("chat");
+    const atBottom = innerHeight + scrollY >= document.body.scrollHeight - 80;
+    box.textContent = "";
+    for (const it of h.items) {
+      const d = document.createElement("div");
+      d.className = "m " + (it.who === "user" ? "u" : "c" + (it.final ? "" : " mid"));
+      d.textContent = it.text;
+      box.appendChild(d);
+    }
+    if (h.working) { const b = document.createElement("div"); b.className = "busy"; b.textContent = "Claude が作業中…"; box.appendChild(b); }
+    if (atBottom) scrollTo(0, document.body.scrollHeight);
+  }
+  setInterval(chatRefresh, 3000);
+  document.addEventListener("visibilitychange", chatRefresh);
+
   $("voLast").onclick = async () => {
     voStop();
     try { const r = await postJson("/reply", { since: 0 }); if (r.text) speak(r.text); }
