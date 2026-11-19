@@ -58,6 +58,8 @@
   .modebar [data-mode="test"] { flex: 0 0 auto; padding: 9px 12px; }
   .vo { padding: 28px 8px; font-size: 22px; border-radius: 14px; }
   .vo.rec { background: #c0392b; color: #fff; }
+  .vorow { display: flex; gap: 8px; } .vorow button { flex: 1; padding: 12px 6px; }
+  #voReply { white-space: pre-wrap; max-height: 40vh; overflow: auto; }
   .tnote { color: #999; font-size: 13px; margin: 0; }
   #voText { min-height: 3em; font-size: 18px; color: #ddd; white-space: pre-wrap; }
   #qr { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.85);
@@ -114,7 +116,10 @@
   <button id="voTv" class="vo">🎤 テレビに打つ</button>
   <label class="tnote"><input type="checkbox" id="voEnter"> 打ったあと Enter も押す</label>
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
+  <label class="tnote"><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む</label>
+  <div class="vorow"><button id="voLast">🔁 最後の返事を読む</button><button id="voStop">⏹ 止める</button></div>
   <div id="voText"></div>
+  <div id="voReply" class="tnote"></div>
 </div>
 <div id="inputView">
 <div class="kpanel" id="pJa">
@@ -262,7 +267,67 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     r.start();
   }
   $("voTv").onclick = () => voListen($("voTv"), (text) => post("/type", { text, enter: $("voEnter").checked }));
-  $("voClaude").onclick = () => voListen($("voClaude"), (text) => post("/claude", { text }));
+  $("voClaude").onclick = () => voListen($("voClaude"), async (text) => {
+    const r = await postJson("/claude", { text });
+    if ($("voSpeak").checked) waitReply(r.since);
+  });
+
+  // 返事の読み上げ：/reply で Claude の返事が来るまで待ち、/tts（VOICEVOX のずんだもん）で文ごとに声にして順に鳴らす
+  async function postJson(path, body) {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
+                                  body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+  let voGen = 0, voAudio = null;
+  function voStop() { voGen++; if (voAudio) { voAudio.pause(); voAudio = null; } }
+  async function waitReply(since) {
+    const gen = ++voGen;
+    $("voReply").textContent = "返事を待っています…";
+    for (let i = 0; i < 300 && gen === voGen; i++) {  // 2 秒ごと、最大 10 分
+      await new Promise((ok) => setTimeout(ok, 2000));
+      try {
+        const r = await postJson("/reply", { since });
+        if (r.text) { if (gen === voGen) speak(r.text, gen); return; }
+      } catch (e) { $("voReply").textContent = "返事を取れませんでした：" + e.message; return; }
+    }
+  }
+  function chunks(text) {  // 文の切れ目で 120 字くらいずつに分ける（最初の声が早く出るように）
+    const out = []; let cur = "";
+    for (const s of text.split(/(?<=[。！？!?\n])/)) {
+      if (cur && (cur + s).length > 120) { out.push(cur); cur = ""; }
+      cur += s;
+    }
+    if (cur.trim()) out.push(cur);
+    return out.map((c) => c.trim()).filter(Boolean);
+  }
+  async function tts(text) {
+    const r = await fetch("/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
+                                    body: JSON.stringify({ text }) });
+    if (!r.ok) throw new Error(await r.text());
+    return URL.createObjectURL(await r.blob());
+  }
+  async function speak(text, gen = ++voGen) {
+    $("voReply").textContent = text;
+    const parts = chunks(text);
+    let next = parts.length ? tts(parts[0]) : null;
+    for (let i = 0; i < parts.length && gen === voGen; i++) {
+      let url;
+      try { url = await next; } catch (e) { $("voReply").textContent = "声にできませんでした：" + e.message + "\n\n" + text; return; }
+      next = i + 1 < parts.length ? tts(parts[i + 1]) : null;  // 鳴らしている間に次を作る
+      if (gen !== voGen) return;
+      await new Promise((ok) => { voAudio = new Audio(url); voAudio.onended = voAudio.onerror = ok; voAudio.play().catch(ok); });
+      URL.revokeObjectURL(url);
+    }
+  }
+  $("voLast").onclick = async () => {
+    voStop();
+    try { const r = await postJson("/reply", { since: 0 }); if (r.text) speak(r.text); }
+    catch (e) { $("voReply").textContent = e.message; }
+  };
+  $("voStop").onclick = voStop;
+  try { $("voSpeak").checked = localStorage.getItem("voSpeak") !== "0"; } catch (e) { $("voSpeak").checked = true; }
+  $("voSpeak").onchange = () => { try { localStorage.setItem("voSpeak", $("voSpeak").checked ? "1" : "0"); } catch (e) {} };
 
   // QR コード：スマホで開く URL（LAN 側 IP ＋合言葉）を表示する。ライブラリは押したときに読み込む
   function loadScript(src) {

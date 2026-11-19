@@ -474,6 +474,70 @@ def wlrctl(args):
         raise RuntimeError(r.stderr.strip() or f"wlrctl exit {r.returncode}")
 
 
+# 音声で頼む（/claude）の返事を読み上げる：常駐の Claude の会話の記録（jsonl）から返事を取り、VOICEVOX（ずんだもん）で声にする
+CLAUDE_PROJ = Path.home() / ".claude/projects/-home-motoki-work-howm"
+VOICEVOX = "http://127.0.0.1:50021"
+ZUNDAMON = 3  # VOICEVOX の話者番号（ずんだもん ノーマル）
+
+
+def claude_reply(since):
+    """since（UNIX 時刻）より後に Claude が答え終わった最後の返事の文字。まだなら None"""
+    from datetime import datetime
+    files = sorted(CLAUDE_PROJ.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
+    if not files:
+        return None
+    f = files[-1]
+    with open(f, "rb") as fh:
+        fh.seek(max(0, f.stat().st_size - 3_000_000))
+        lines = fh.read().splitlines()
+    for line in reversed(lines):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        ts = d.get("timestamp")
+        if ts and datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() <= since:
+            break
+        m = d.get("message") or {}
+        if d.get("type") == "assistant" and not d.get("isSidechain") and m.get("stop_reason") == "end_turn":
+            text = "".join(c.get("text", "") for c in m.get("content", []) if c.get("type") == "text")
+            if text.strip():
+                return text
+    return None
+
+
+def speakable(md):
+    """Markdown を読み上げ向けに：コード・URL・表の区切り・記号を省く"""
+    import re
+    md = md.split("\nSources:")[0]
+    md = re.sub(r"```.*?```", "（コードは省略）", md, flags=re.S)
+    md = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", md)
+    md = re.sub(r"https?://\S+", "", md)
+    out = []
+    for ln in md.splitlines():
+        ln = ln.strip()
+        if re.fullmatch(r"\|?[\s:|-]+\|?", ln) and "-" in ln:
+            continue  # 表の区切りの行
+        ln = re.sub(r"^#+\s*|^[-*]\s+|^>\s*", "", ln)
+        ln = ln.strip("|").replace("|", "、")
+        ln = re.sub(r"[*`_~]", "", ln)
+        if ln:
+            out.append(ln)
+    return "\n".join(out)
+
+
+def tts(text):
+    """VOICEVOX でずんだもんの声の WAV を作る"""
+    import urllib.request
+    from urllib.parse import quote
+    q = json.loads(urllib.request.urlopen(urllib.request.Request(
+        f"{VOICEVOX}/audio_query?speaker={ZUNDAMON}&text={quote(text)}", method="POST"), timeout=30).read())
+    q["speedScale"] = 1.15
+    return urllib.request.urlopen(urllib.request.Request(
+        f"{VOICEVOX}/synthesis?speaker={ZUNDAMON}", data=json.dumps(q).encode(),
+        headers={"Content-Type": "application/json"}, method="POST"), timeout=120).read()
+
+
 class Handler(BaseHTTPRequestHandler):
     def _authed(self):
         q = parse_qs(urlparse(self.path).query)
@@ -558,6 +622,7 @@ class Handler(BaseHTTPRequestHandler):
                                       text=True).stdout.strip() if tasks.exists() else ""
                 if not sock or not Path(sock).is_socket():
                     return self._reply(500, "常駐の Claude が見つかりません".encode())
+                since = time.time()
                 # 文字と Enter を分けて送る（一緒に送ると貼り付けの扱いになり、送信されないことがある）。操作キーは送らない
                 subprocess.run(["dtach", "-p", sock], input=text.encode(), check=True)
                 time.sleep(0.4)
@@ -565,6 +630,16 @@ class Handler(BaseHTTPRequestHandler):
                 wf = Path.home() / ".local/bin/win-focus"  # テレビは端末（ttyd）のタブへ（F7＋T と同じ）
                 if wf.exists():
                     subprocess.Popen([str(wf), "ttyd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return self._reply(200, json.dumps({"since": since}).encode(), "application/json")
+            elif path == "/reply":  # /claude で頼んだあとの Claude の返事（読み上げ向けに整えたもの）。まだなら text は null
+                text = claude_reply(float(data.get("since", 0)))
+                return self._reply(200, json.dumps({"text": text and speakable(text)}, ensure_ascii=False).encode(),
+                                   "application/json")
+            elif path == "/tts":  # 文字をずんだもんの声（VOICEVOX）の WAV に
+                text = str(data.get("text", "")).strip()[:500]
+                if not text:
+                    return self._reply(400, b"empty")
+                return self._reply(200, tts(text), "audio/wav")
             elif path == "/open":  # 共有（/share）から：テレビの Brave の新しいタブで開く（autotube の openurl）
                 import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8766/api/openurl", method="POST",
