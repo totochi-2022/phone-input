@@ -502,15 +502,25 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     const tasks = h.tasks || [], run = tasks.filter((k) => k.status === "running");
     const tkHtml = tasks.length ? `<span class="tk" id="tkBtn">${run.length ? `⏳ 実行中 ${run.length}` : "✓ 裏の作業"} ›</span>` : "";
     // コンテキストの残り（端末の Claude Code と同じく残りで出す）：20% 以下で黄、10% を切ったら赤。押すとトークンの数
+    // ステータスライン（~/.local/bin/claude-statusline が保存した、Claude Code の計算した値）があればそれ、無ければ会話の記録から
     let cxHtml = "";
-    if (h.ctx) {
-      const left = Math.max(0, Math.round(100 - h.ctx / h.ctx_max * 100)), cls = left < 10 ? "cxr" : left <= 20 ? "cxy" : "";
-      cxHtml = `<span class="cx ${cls}" id="cxBtn">コンテキスト 残り ${left}%${cxOpen ? `（${(h.ctx / 1000).toFixed(1)}k / ${h.ctx_max / 1e6}M 使用）` : ""}</span>`;
+    const sl = h.sl;
+    const leftRaw = sl && sl.left != null ? sl.left : h.ctx ? 100 - h.ctx / h.ctx_max * 100 : null;
+    if (leftRaw != null) {
+      const left = Math.max(0, Math.round(leftRaw)), cls = left < 10 ? "cxr" : left <= 20 ? "cxy" : "";
+      cxHtml = `<span class="cx ${cls}" id="cxBtn">コンテキスト 残り ${left}%${cxOpen && h.ctx ? `（${(h.ctx / 1000).toFixed(1)}k / ${h.ctx_max / 1e6}M 使用）` : ""}</span>`;
+    }
+    // プランの使用量（5 時間・週）：80% から黄、90% から赤。押すとリセットの時刻
+    const hm = (t, wd) => { const d = new Date(t * 1000); return (wd ? "日月火水木金土"[d.getDay()] + " " : "") + d.toTimeString().slice(0, 5); };
+    for (const [w, name, wd] of [[sl && sl.five, "5時間", false], [sl && sl.week, "週", true]]) {
+      if (!w || w.used_percentage == null) continue;
+      const u = Math.round(w.used_percentage), cls = u >= 90 ? "cxr" : u >= 80 ? "cxy" : "";
+      cxHtml += `<span class="cx ${cls}" id="cxBtn${name}">${name} ${u}%${cxOpen && w.resets_at ? `（${hm(w.resets_at, wd)} にリセット）` : ""}</span>`;
     }
     if ($("clStatus").innerHTML !== stHtml + cxHtml + tkHtml) {
       $("clStatus").innerHTML = stHtml + cxHtml + tkHtml;
       if ($("tkBtn")) $("tkBtn").onclick = () => { tkOpen = !tkOpen; renderTasks(); };
-      if ($("cxBtn")) $("cxBtn").onclick = () => { cxOpen = !cxOpen; chatRefresh(); };
+      for (const id of ["cxBtn", "cxBtn5時間", "cxBtn週"]) if ($(id)) $(id).onclick = () => { cxOpen = !cxOpen; chatSig = ""; chatRefresh(); };
     }
     lastTasks = tasks; renderTasks();
     showPrompt(h.prompt);

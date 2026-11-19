@@ -536,6 +536,21 @@ def _tool_desc(name, inp):
 
 
 CTX_MAX = 1_000_000  # コンテキストウィンドウの大きさ（この Claude は 1M）
+STATUSLINE = Path.home() / ".local/state/claude-statusline/by-dir/home-motoki-work-howm.json"  # ~/.local/bin/claude-statusline が保存
+
+
+def claude_statusline():
+    """ステータスラインに Claude Code が渡した情報（コンテキストの残り・5 時間と週の枠・モデル）。無いか 15 分より古ければ None"""
+    try:
+        d = json.loads(STATUSLINE.read_text())
+    except (OSError, ValueError):
+        return None
+    if time.time() - d.get("_saved_at", 0) > 900:
+        return None
+    cw, rl = d.get("context_window") or {}, d.get("rate_limits") or {}
+    return {"left": cw.get("remaining_percentage"), "size": cw.get("context_window_size"),
+            "model": (d.get("model") or {}).get("display_name"),
+            "five": rl.get("five_hour"), "week": rl.get("seven_day")}
 
 
 def claude_history(n=30):
@@ -1015,6 +1030,7 @@ class Handler(BaseHTTPRequestHandler):
                     CHAT_CUTOFF.write_text(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
                 h = claude_history(int(data.get("n", 30)))
                 h["status"] = claude_status()
+                h["sl"] = claude_statusline()
                 h["prompt"] = claude_prompt()
                 h["suggest"] = None if h["prompt"] or h["working"] else claude_suggestion()
                 return self._reply(200, json.dumps(h, ensure_ascii=False).encode(), "application/json")
