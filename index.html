@@ -432,9 +432,10 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     if (/allow reading/i.test(l)) return "はい、この場所の読み取りを今後許す";
     return "";
   }
-  let promptSig = "";
+  let promptSig = "", answered = { sig: "", until: 0 };
   function showPrompt(p) {
-    const sig = p ? p.screen + "|" + p.options.map((o) => o.label).join("|") : "";
+    let sig = p ? p.screen + "|" + p.options.map((o) => o.label).join("|") : "";
+    if (sig && sig === answered.sig && Date.now() < answered.until) sig = "";  // 答えたばかりの同じ確認は出し直さない
     if (sig === promptSig) return;
     promptSig = sig;
     const box = $("clPrompt");
@@ -453,9 +454,16 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
     const labels = p.options.map((o) => o.label);
     const send = async (body, btn) => {
       ans.querySelectorAll("button").forEach((b) => (b.disabled = true));
-      try { await postJson("/answer", { ...body, labels }); btn.textContent = "✔ " + btn.textContent; }
-      catch (e) { $("voText").textContent = "答えられませんでした：" + e.message; }
-      setTimeout(() => { promptSig = ""; chatSig = ""; chatRefresh(); }, 800);
+      try {
+        await postJson("/answer", { ...body, labels });
+        answered = { sig: promptSig, until: Date.now() + 6000 };  // 送ったら枠はすぐ消す
+        box.textContent = ""; promptSig = "";
+        $("voText").textContent = "答えました：" + btn.firstChild.textContent;
+      } catch (e) {
+        $("voText").textContent = "答えられませんでした：" + e.message;
+        ans.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      }
+      setTimeout(() => { chatSig = ""; chatRefresh(); }, 800);
     };
     for (const o of p.options) {
       const b = document.createElement("button");
