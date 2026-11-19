@@ -753,6 +753,7 @@ say_gen = 0  # テレビで読む（/say）の世代。新しく読むか止め�
 say_proc = None
 
 
+PHOTO_DIR = Path.home() / ".local/state/phone-input/photos"  # リモコンから Claude に送った写真
 CLIENT_LOG = Path.home() / ".local/state/phone-input/client.log"  # 画面とサーバーの裏で起きたエラーの記録（Claude が読む）
 
 
@@ -855,8 +856,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._reply(403, b"forbidden")
         try:
             n = int(self.headers.get("Content-Length", "0"))
-            data = json.loads(self.rfile.read(n) or b"{}")
             path = urlparse(self.path).path
+            if path == "/upload":  # 写真（Claude に送る）。中身は画像そのもの（スマホで縮めた JPEG）。保存した場所を返す
+                if not 0 < n <= 25_000_000:
+                    return self._reply(413, b"too large")
+                body = self.rfile.read(n)
+                ext = {b"\xff\xd8": ".jpg", b"\x89P": ".png"}.get(body[:2], "")
+                if not ext:
+                    return self._reply(400, "画像（JPEG・PNG）ではありません".encode())
+                PHOTO_DIR.mkdir(parents=True, exist_ok=True)
+                f = PHOTO_DIR / (time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2) + ext)
+                f.write_bytes(body)
+                return self._reply(200, json.dumps({"path": str(f)}).encode(), "application/json")
+            data = json.loads(self.rfile.read(n) or b"{}")
             if path == "/type":
                 text = str(data.get("text", ""))
                 if text:
@@ -877,6 +889,9 @@ class Handler(BaseHTTPRequestHandler):
                     mouse_op(op)
             elif path == "/claude":  # 音声で頼む：常駐の Claude（~/work/howm、dtach の中）の入力欄に打ち込んで送る（tonzura だけ）
                 text = " ".join(str(data.get("text", "")).split())  # 改行は空白に（途中で送信されないように）
+                photos = [p for p in data.get("photos", []) if str(p).startswith(str(PHOTO_DIR) + "/") and Path(p).is_file()]
+                if photos:  # 写真の場所を文の後ろに。Claude は「📷 写真:」の場所を開いて見る
+                    text = (text + " " if text else "写真を送ります。 ") + "📷 写真: " + " ".join(photos)
                 if not text:
                     return self._reply(400, b"empty")
                 # 印：🎤＝音声入力（Claude が聞き間違いを音の似た言葉として読み替える）。plain＝おすすめをそのまま送るとき（🎤 なし）。
