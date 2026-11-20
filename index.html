@@ -474,12 +474,18 @@
   async function waitReply(since) {
     const gen = ++voGen;
     $("voReply").textContent = "返事を待っています…";
+    let fails = 0;
     for (let i = 0; i < 300 && gen === voGen; i++) {  // 2 秒ごと、最大 10 分
       await new Promise((ok) => setTimeout(ok, 2000));
       try {
         const r = await postJson("/reply", { since });
+        fails = 0;
         if (r.text) { if (gen === voGen) speak(r.text, gen); return; }
-      } catch (e) { $("voReply").textContent = "返事を取れませんでした：" + e.message; return; }
+      } catch (e) {
+        // phone-input の起動し直し・Wi-Fi の切り替えなどで数回つながらないことがある。30 秒続いたらあきらめる
+        if (++fails >= 15) { $("voReply").textContent = "返事を取れませんでした：" + e.message; return; }
+        $("voReply").textContent = "返事を待っています…（つながり直し中）";
+      }
     }
   }
   // 声の切り替え（ずんだもんのスタイル）：かっこの中の補足はヒソヒソ、「なお」「ちなみに」などで始まる余談の文はささやき
