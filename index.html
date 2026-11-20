@@ -123,6 +123,14 @@
   #clStatus b { color: #eee; } #clStatus .att { color: #f0c040; }
   .tnote { color: #999; font-size: 13px; margin: 0; }
   #voText { min-height: 3em; font-size: 18px; color: #ddd; white-space: pre-wrap; }
+  #help { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.92); overflow-y: auto;
+          padding: 16px 14px 40px; box-sizing: border-box; font-size: 14px; line-height: 1.55; }
+  #help.on { display: block; }
+  #help h3 { font-size: 15px; color: #8ab4ff; margin: 14px 0 4px; }
+  #help table { border-collapse: collapse; width: 100%; }
+  #help td { padding: 3px 6px; border-bottom: 1px solid #2a2a2a; vertical-align: top; }
+  #help td:first-child { white-space: nowrap; color: #ffd27a; width: 1%; }
+  #helpClose { position: sticky; top: 0; float: right; width: auto; padding: 8px 14px; z-index: 1; }
   #qr { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.85);
         align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 16px; }
   #qr.on { display: flex; }
@@ -165,6 +173,44 @@
   <button data-mode="at">▶ autotube</button>
   <button data-mode="bm" title="テレビの Brave のブックマークを開く（autotube の /bookmarks）">🔖 ブックマーク</button>
   <button data-mode="test" title="Claude：音声で常駐の Claude に頼む・返事を見る・読む">🤖</button>
+</div>
+<div id="help">
+<button id="helpClose">✕ 閉じる</button>
+<h3>この画面（リモコン）</h3>
+<table>
+<tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール</td></tr>
+<tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる</td></tr>
+<tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
+<tr><td>F6 ロック</td><td>F6 を押さえたまま Shift＝F6 を押しっぱなし（動画の操作を続けて打てる）。もう一度 F6 か Shift で解除</td></tr>
+<tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
+<tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
+<tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
+</table>
+<h3>窓・タブ（F7・F8・かな）</h3>
+<table>
+<tr><td>F7</td><td>端末 → ブラウザ → 動画 の順に切り替え（行き先以外の動画は一時停止）</td></tr>
+<tr><td>Shift＋F7</td><td>切り替えるだけ（動画は止めない）</td></tr>
+<tr><td>F7＋B／M／T</td><td>ブラウザ（最後に見ていたタブ）／動画／端末へ</td></tr>
+<tr><td>F7（かな）＋J・→ ／ K・←</td><td>次のタブ／前のタブ</td></tr>
+<tr><td>F7（かな）＋N ／ W</td><td>新しいタブ／タブを閉じる</td></tr>
+<tr><td>かな（単独）</td><td>日本語入力の切り替え</td></tr>
+<tr><td>F8</td><td>窓を全画面</td></tr>
+<tr><td>F8＋矢印</td><td>左・右・上・下の半分（2 方向続けて 4 分の 1、同じキーで戻る）</td></tr>
+<tr><td>F8＋Shift ／ Shift＋F8</td><td>元の大きさ</td></tr>
+<tr><td>Space（押したまま）</td><td>Shift（単独で離すとスペース）</td></tr>
+</table>
+<h3>動画（F6＋キー。F6 単独・F9＝動画だけ全画面）</h3>
+<table>
+<tr><td>← → ／ J L</td><td>10 秒戻る／進む</td></tr>
+<tr><td>H ／ ;</td><td>1 分戻る／進む</td></tr>
+<tr><td>G ／ :</td><td>3 分戻る／進む</td></tr>
+<tr><td>Space ／ K</td><td>再生・一時停止</td></tr>
+<tr><td>↑ ↓ ／ M</td><td>音量／ミュート</td></tr>
+<tr><td>, . ／ /</td><td>遅く・速く／1 倍に</td></tr>
+<tr><td>1〜9 ／ 0</td><td>10〜90％ の位置へ／先頭へ</td></tr>
+<tr><td>C</td><td>字幕の出し入れ</td></tr>
+<tr><td>S</td><td>「スキップ」「次のエピソード」などのボタンを押す</td></tr>
+</table>
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write"></iframe></div>
@@ -217,7 +263,7 @@
   <label><input type="checkbox" id="enter"> 送信後に Enter</label>
   <label><input type="checkbox" id="auto"> 自動送信（音声入力が止まって 1 秒後）</label>
 </div>
-<p style="text-align:center;margin-top:16px"><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
+<p style="text-align:center;margin-top:16px"><button id="helpBtn" style="width:auto;padding:8px 16px;margin-right:8px">？ 使い方・ショートカット</button><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
 </div><!-- /inputView -->
 <link rel="stylesheet" href="/vendor/hljs-dark.min.css">
 <script src="/vendor/highlight.min.js"></script><!-- 道具の使用のコマンド・出力の色付け -->
@@ -749,6 +795,9 @@
     } catch (e) { alert("QR コードを作れませんでした: " + e.message); }
   };
   $("qr").onclick = () => $("qr").classList.remove("on");
+  // 使い方とショートカットの一覧（下の説明文は 2026-11-21 に外してここへ）
+  $("helpBtn").onclick = () => { $("help").scrollTop = 0; $("help").classList.add("on"); };
+  $("helpClose").onclick = () => $("help").classList.remove("on");
 
   // 入力の欄は日本語（🎤・音声入力）だけ。1 文字ずつ打つのは下の PC キーボードで（英語の直打ちの欄は 2026-11-19 に外した）
   document.body.classList.add("k-ja");
