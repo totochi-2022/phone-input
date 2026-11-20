@@ -482,6 +482,12 @@ ZUNDAMON = 3  # VOICEVOX の話者番号（ずんだもん ノーマル）
 
 def claude_reply(since):
     """since（UNIX 時刻）より後に Claude が答え終わった最後の返事の文字。まだなら None"""
+    r = claude_reply_ts(since)
+    return r[0] if r else None
+
+
+def claude_reply_ts(since):
+    """claude_reply と同じで、(文字, その返事の UNIX 時刻)。まだなら None"""
     from datetime import datetime
     files = sorted(CLAUDE_PROJ.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
     if not files:
@@ -502,7 +508,7 @@ def claude_reply(since):
         if d.get("type") == "assistant" and not d.get("isSidechain") and m.get("stop_reason") == "end_turn":
             text = "".join(c.get("text", "") for c in m.get("content", []) if c.get("type") == "text")
             if text.strip():
-                return text
+                return text, datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() if ts else time.time()
     return None
 
 
@@ -1081,11 +1087,14 @@ class Handler(BaseHTTPRequestHandler):
                     subprocess.Popen([str(wf), "ttyd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return self._reply(200, json.dumps({"since": since}).encode(), "application/json")
             elif path == "/reply":  # /claude で頼んだあとの Claude の返事（読み上げ向けに整えたもの）。まだなら text は null
-                text = claude_reply(float(data.get("since", 0)))
+                r = claude_reply_ts(float(data.get("since", 0)))
+                text, ts = r if r else (None, 0)
+                # 返事の最後に「⏩続く」＝先に返事だけ返して作業を続けている（Stop フック claude-continue-hook）。画面はこのあとも待つ
+                cont = bool(text) and "⏩続く" in text.rstrip()[-40:]
                 if text:  # 「🔊 」で始まる行（読み上げ用の要約）があればそこだけ読む
                     summary = [ln.strip().lstrip("🔊").strip() for ln in text.splitlines() if ln.strip().startswith("🔊")]
                     text = speakable("\n".join(summary) if summary else text)
-                return self._reply(200, json.dumps({"text": text}, ensure_ascii=False).encode(), "application/json")
+                return self._reply(200, json.dumps({"text": text, "ts": ts, "cont": cont}, ensure_ascii=False).encode(), "application/json")
             elif path == "/say":  # テレビのスピーカーで読む。parts が空なら止める
                 parts = [{"text": str(p.get("text", ""))[:500], "speaker": int(p.get("speaker", ZUNDAMON))}
                          for p in data.get("parts", []) if str(p.get("text", "")).strip()]
