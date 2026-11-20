@@ -66,6 +66,8 @@
   #voText { font-size: 14px; color: #ddd; white-space: pre-wrap; max-height: 30vh; overflow-y: auto; }
   #voReply { font-size: 13px; color: #bbb; white-space: pre-wrap; max-height: 3.2em; overflow: hidden; }
   #voText:empty, #voReply:empty { display: none; }
+  #voCancel { width: 100%; margin-top: 6px; padding: 10px; background: #5a2a2a; color: #fff; border: 1px solid #a55; border-radius: 8px; font-size: 16px; }
+  #voCancel[hidden] { display: none; }
   #chat { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 0 12px;
           border-top: 1px solid #333; }
   #chat .m { white-space: pre-wrap; word-break: break-word; padding: 8px 10px; border-radius: 10px; font-size: 14px; line-height: 1.45; max-width: 92%; }
@@ -187,6 +189,7 @@
   <div id="clTasks" class="tnote" hidden></div>
   <div id="clPrompt"></div>
   <div id="voText"></div>
+  <button id="voCancel" hidden>✕ 送らない</button>
   <div id="voReply" class="tnote"></div>
   <div id="chat"></div>
 </div>
@@ -359,21 +362,34 @@ F6 を押さえたまま Shift＝F6 を押しっぱなしに（動画の操作�
       r.start();
     }
     arm(8000); startOne();
-    return { stop() { done = true; if (rec) rec.stop(); } };
+    return { stop() { done = true; if (rec) rec.stop(); },
+             cancel() { done = true; onDone = () => {}; clearTimeout(timer); if (rec) rec.abort(); } };  // 送らずに捨てる
   }
-  let voRec = null;
+  // 「✕ 送らない」：聞いている間と、聞き終わって送るまでの SEND_WAIT_MS のあいだ押せる（テレビの音を拾ったときなど）
+  const SEND_WAIT_MS = 2000;
+  let voRec = null, voSendTimer = null;
+  $("voCancel").onclick = () => {
+    if (voRec) { voRec.cancel(); voRec = null; }
+    clearTimeout(voSendTimer); voSendTimer = null;
+    $("voClaude").classList.remove("rec"); $("voCancel").hidden = true;
+    $("voText").textContent = "送りませんでした";
+  };
   function voListen(btn, deliver) {
     if (!SR) { $("voText").textContent = "このブラウザでは音声認識が使えません（HTTPS のアプリで開く）"; return; }
     if (voRec) { voRec.stop(); return; }  // 話している途中でもう一度押したら、そこで終わる
-    btn.classList.add("rec"); $("voText").textContent = "聞いています…";
+    btn.classList.add("rec"); $("voText").textContent = "聞いています…"; $("voCancel").hidden = false;
     voRec = listenLong({
       onText: (t) => { const v = $("voText"); v.textContent = t; v.scrollTop = v.scrollHeight; },  // 長くなったら最新の所を見せる
       onError: (err) => { clog("speech", err); $("voText").textContent = "聞き取れませんでした（" + err + "）"; },
-      onDone: async (text) => {
+      onDone: (text) => {
         btn.classList.remove("rec"); voRec = null;
-        if (!text) return;
-        try { await deliver(text); $("voText").textContent = "送りました：" + text; }
-        catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
+        if (!text) { $("voCancel").hidden = true; return; }
+        $("voText").textContent = text + "\n（2 秒後に送ります）";
+        voSendTimer = setTimeout(async () => {
+          voSendTimer = null; $("voCancel").hidden = true;
+          try { await deliver(text); $("voText").textContent = "送りました：" + text; }
+          catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
+        }, SEND_WAIT_MS);
       },
     });
   }
