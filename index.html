@@ -207,7 +207,7 @@
 <tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
 <tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
 <tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
-<tr><td>🤖 Claude に頼む</td><td>短く押す＝話して頼む（作業中なら順番待ち）、長押し（0.5 秒で震えてすぐ聞き始める）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
+<tr><td>🤖 Claude に頼む</td><td>1 回目に押す＝聞き始める。話し終わって 2 回目：短く押す＝割り込まずに頼む、長押し（0.5 秒で震えてすぐ終わる）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
 <tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（0.5 秒で震えてすぐ送る）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
 </table>
 <h3>窓・タブ（F7・F8・かな）</h3>
@@ -285,7 +285,7 @@
   <label><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む</label>
   <div>読む場所：<label><input type="radio" name="voOut" value="phone"> スマホ</label>　<label><input type="radio" name="voOut" value="tv"> テレビ</label></div>
   <label><input type="checkbox" id="voJump"> 頼んだらテレビを端末へ切り替える</label>
-  <div style="color:#aaa;font-size:13px">🤖 Claude に頼むを長押しして話すと、Claude が作業中なら割り込んで今すぐ読ませる（短く押すと順番待ち）</div>
+  <div style="color:#aaa;font-size:13px">🤖 Claude に頼むで話し終わったとき、2 回目を長押しすると割り込みで送る（Claude が作業中でも今すぐ読ませる。短く押すと順番待ち）</div>
 </div>
 <p style="color:#aaa;font-size:13px;margin-top:14px">文字の欄・マウス・キーボードは 🎮 操作の画面の下にあります。</p>
 <p style="text-align:center;margin-top:16px"><button id="helpBtn" style="width:auto;padding:8px 16px;margin-right:8px">？ 使い方・ショートカット</button><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
@@ -460,7 +460,7 @@
       onDone: (text) => {
         btn.classList.remove("rec"); voRec = null;
         if (!text) { $("voCancel").hidden = true; return; }
-        $("voText").textContent = text + "\n（2 秒後に送ります）";
+        $("voText").textContent = text + ($("voCut").checked ? "\n（2 秒後に割り込みで送ります）" : "\n（2 秒後に送ります）");
         voSendTimer = setTimeout(async () => {
           voSendTimer = null; $("voCancel").hidden = true;
           try { await deliver(text); $("voText").textContent = "送りました：" + text; }
@@ -518,25 +518,25 @@
     try { await askClaude(""); $("voText").textContent = "写真を送りました"; }
     catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
   };
-  // 短く押す＝順番待ち（作業中なら終わってから読まれる）、長押し 0.5 秒＝割り込み（作業中なら今すぐ読ませる）
+  // 1 回目に押す＝聞き始める。2 回目に押す＝そこで聞くのを終えて送る：
+  //   短く押す＝割り込まずに頼む（作業中なら終わってから読まれる）、
+  //   0.5 秒押し続ける＝離すのを待たずに震えて聞くのを終え、割り込みで送る（作業中でも今すぐ読ませる）
   {
     let t0 = 0, lt = null;
     const b = $("voClaude");
-    // 0.5 秒押し続けたら、離すのを待たずにその場で（震えて）割り込みの聞き取りを始める
     b.addEventListener("pointerdown", () => {
       t0 = Date.now();
-      if (!voRec) lt = setTimeout(() => {
+      if (voRec) lt = setTimeout(() => {
         t0 = 0; if (navigator.vibrate) navigator.vibrate(80);
-        $("voCut").checked = true; voListen(b, askClaude);
-        $("voText").textContent = "聞いています…（割り込みで送ります）";
+        $("voCut").checked = true; voRec.stop();
       }, 500);
     });
     const end = (go) => {
       clearTimeout(lt);
-      if (!go || !t0) { t0 = 0; return; }  // 長押しはもう始めた
+      if (!go || !t0) { t0 = 0; return; }  // 長押しはもう終えた
       t0 = 0;
-      if (!voRec) $("voCut").checked = false;  // 短く押す＝割り込まない（聞いている途中の 2 回目はそこで終わる）
-      voListen(b, askClaude);
+      $("voCut").checked = false;
+      voListen(b, askClaude);  // 聞いていなければ聞き始め、聞いていればそこで終えて送る
     };
     b.addEventListener("pointerup", () => end(true));
     b.addEventListener("pointercancel", () => end(false));
