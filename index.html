@@ -56,7 +56,7 @@
   #bmPad .row button { height: 40px; padding: 0 4px; }
   #bmPad .row { margin-top: 6px; }
   #bmPad .line { margin-top: 2px; }
-  #send.long { background: #d7802a; color: #fff; }  /* 長押し＝Enter 付きになったしるし */
+  #send.long, #voClaude.long { background: #d7802a; color: #fff; }  /* 長押し＝Enter 付きになったしるし */
   #bmPad #status { margin: 2px 0 0; font-size: 12px; }
   /* 上の端の帯：横になぞる（か押す）とマウス⇔キーボード */
   #bmSwitch { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 -12px; padding: 7px 0;
@@ -191,7 +191,7 @@
 </head>
 <body>
 <div class="modebar" id="modebar">
-  <button data-mode="bm" title="テレビの Brave のブックマークを開く（autotube の /bookmarks）・マウス・キーボード">🔖 ブックマーク</button>
+  <button data-mode="bm" title="テレビの操作：ブックマーク・タブ・動画（autotube の /bookmarks）・文字・マウス・キーボード">🎮 操作</button>
   <button data-mode="at">▶ autotube</button>
   <button data-mode="test" title="Claude：音声で常駐の Claude に頼む・返事を見る・読む">🤖 Claude に頼む</button>
   <button data-mode="input" title="設定・使い方・QR コード">⚙</button>
@@ -202,12 +202,13 @@
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる</td></tr>
-<tr><td>🔖 の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る</td></tr>
+<tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
 <tr><td>F6 ロック</td><td>F6 を押さえたまま Shift＝F6 を押しっぱなし（動画の操作を続けて打てる）。もう一度 F6 か Shift で解除</td></tr>
 <tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
 <tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
 <tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
+<tr><td>🤖 Claude に頼む</td><td>短く押す＝話して頼む（作業中なら順番待ち）、長押し（橙）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
 <tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（橙になる）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
 </table>
 <h3>窓・タブ（F7・F8・かな）</h3>
@@ -248,12 +249,7 @@
   <div class="phrow"><label class="phbtn" title="すぐカメラで撮る">📸<input type="file" id="phCam" accept="image/*" capture="environment" hidden></label>
     <label class="phbtn" title="ギャラリーから選ぶ（何枚でも）">📷<input type="file" id="phFile" accept="image/*" multiple hidden></label>
     <div id="phList"></div><button id="phSend" hidden>写真だけ送る</button></div>
-  <div class="opts tnote">
-    <label><input type="checkbox" id="voSpeak"> ずんだもんが読む</label>
-    <label><input type="radio" name="voOut" value="phone"> スマホ</label><label><input type="radio" name="voOut" value="tv"> テレビ</label>
-    <label><input type="checkbox" id="voJump"> 端末へ切替</label>
-    <label title="Claude が作業中に頼んだら、続きとして今すぐ割り込む（Ctrl+X Ctrl+S）"><input type="checkbox" id="voCut"> 続きは割り込む</label>
-  </div>
+  <input type="checkbox" id="voCut" hidden><!-- 割り込み：🤖 を長押しして頼んだときだけオン（押すたびに決める） -->
   <div class="vorow"><button id="voLast">🔁 最後の返事</button><button id="voStop">⏹ 止める</button><button id="chatClear">🧹 クリア</button></div>
   <div id="clStatus" class="tnote"></div>
   <div id="clTasks" class="tnote" hidden></div>
@@ -285,7 +281,14 @@
 </div>
 <div class="pckb" id="pckb"></div>
 <h2>設定</h2>
-<p style="color:#aaa;font-size:14px">入力の画面はやめて、マウス・キーボード・文字の欄はブックマークの画面の下に移しました。</p>
+<h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">🤖 Claude に頼む</h3>
+<div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
+  <label><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む</label>
+  <div>読む場所：<label><input type="radio" name="voOut" value="phone"> スマホ</label>　<label><input type="radio" name="voOut" value="tv"> テレビ</label></div>
+  <label><input type="checkbox" id="voJump"> 頼んだらテレビを端末へ切り替える</label>
+  <div style="color:#aaa;font-size:13px">🤖 Claude に頼むを長押しして話すと、Claude が作業中なら割り込んで今すぐ読ませる（短く押すと順番待ち）</div>
+</div>
+<p style="color:#aaa;font-size:13px;margin-top:14px">文字の欄・マウス・キーボードは 🎮 操作の画面の下にあります。</p>
 <p style="text-align:center;margin-top:16px"><button id="helpBtn" style="width:auto;padding:8px 16px;margin-right:8px">？ 使い方・ショートカット</button><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
 </div><!-- /inputView -->
 <link rel="stylesheet" href="/vendor/hljs-dark.min.css">
@@ -516,7 +519,23 @@
     try { await askClaude(""); $("voText").textContent = "写真を送りました"; }
     catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
   };
-  $("voClaude").onclick = () => voListen($("voClaude"), askClaude);
+  // 短く押す＝順番待ち（作業中なら終わってから読まれる）、長押し 0.5 秒＝割り込み（作業中なら今すぐ読ませる）
+  {
+    let t0 = 0, lt = null;
+    const b = $("voClaude");
+    b.addEventListener("pointerdown", () => { t0 = Date.now(); if (!voRec) lt = setTimeout(() => b.classList.add("long"), 500); });
+    const end = (go) => {
+      clearTimeout(lt); b.classList.remove("long");
+      if (!go || !t0) { t0 = 0; return; }
+      const long = Date.now() - t0 >= 500; t0 = 0;
+      if (!voRec) $("voCut").checked = long;  // 聞いている途中の 2 回目（そこで終わる）は決め直さない
+      voListen(b, askClaude);
+      if (voRec && long) $("voText").textContent = "聞いています…（割り込みで送ります）";
+    };
+    b.addEventListener("pointerup", () => end(true));
+    b.addEventListener("pointercancel", () => end(false));
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
 
   // 返事の読み上げ：/reply で Claude の返事が来るまで待ち、/tts（VOICEVOX のずんだもん）で文ごとに声にして順に鳴らす
   async function postJson(path, body) {
@@ -789,7 +808,7 @@
     const text = $("clSuggest").dataset.text; if (!text) return;
     $("clSuggest").disabled = true;
     try {
-      const r = await postJson("/claude", { text, plain: true, jump: $("voJump").checked, speak: $("voSpeak").checked, cut: $("voCut").checked });
+      const r = await postJson("/claude", { text, plain: true, jump: $("voJump").checked, speak: $("voSpeak").checked, cut: false });
       $("voText").textContent = "送りました：" + text;
       if ($("voSpeak").checked) waitReply(r.since);
     } catch (e) { $("voText").textContent = "送れませんでした：" + e.message; }
@@ -823,8 +842,6 @@
   try { const o = localStorage.getItem("voOut") || "phone"; document.querySelector(`input[name="voOut"][value="${o}"]`).checked = true; } catch (e) {}
   document.querySelectorAll('input[name="voOut"]').forEach((r) => r.onchange = () => { try { localStorage.setItem("voOut", r.value); } catch (e) {} });
   try { $("voJump").checked = localStorage.getItem("voJump") === "1"; } catch (e) {}
-  try { $("voCut").checked = localStorage.getItem("voCut") !== "0"; } catch (e) { $("voCut").checked = true; }  // 最初はオン
-  $("voCut").onchange = () => { try { localStorage.setItem("voCut", $("voCut").checked ? "1" : "0"); } catch (e) {} };
   $("voJump").onchange = () => { try { localStorage.setItem("voJump", $("voJump").checked ? "1" : "0"); } catch (e) {} };
   $("voSpeak").onchange = () => { try { localStorage.setItem("voSpeak", $("voSpeak").checked ? "1" : "0"); } catch (e) {} };
 
