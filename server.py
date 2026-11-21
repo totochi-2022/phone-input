@@ -1170,6 +1170,16 @@ class Handler(BaseHTTPRequestHandler):
                                              headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=5) as r:
                     r.read()
+            elif path == "/jump":  # 🎮 操作の帯の 端末／動画：autotube の jump（F7＋T／F7＋M と同じ、ほかの動画は止める）
+                import urllib.request
+                where = str(data.get("where", ""))
+                if where not in ("term", "video"):
+                    return self._reply(400, b"bad where")
+                req = urllib.request.Request("http://127.0.0.1:8766/api/jump", method="POST",
+                                             data=json.dumps({"where": where, "solo": True}).encode(),
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    r.read()
             elif path == "/cast":  # 共有（/share）から：autotube の「テレビに送る」に渡す
                 import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8766/api/cast", method="POST",
