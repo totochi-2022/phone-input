@@ -206,7 +206,7 @@
 <h3>この画面（リモコン）</h3>
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える</td></tr>
-<tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる</td></tr>
+<tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
 <tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
 <tr><td>F6 ロック</td><td>F6 を押さえたまま Shift＝F6 を押しっぱなし（動画の操作を続けて打てる）。もう一度 F6 か Shift で解除</td></tr>
@@ -1063,6 +1063,8 @@
     };
     el.addEventListener("pointerdown", (e) => {
       if (pid !== null) return;
+      // ドラッグ中（左を押さえている間）は右クリックを効かなくする。パッドから下へ滑った指が右クリックに触れていた
+      if (button === "right" && held.has("left")) { e.preventDefault(); if (navigator.vibrate) navigator.vibrate([60, 60, 60]); return; }
       e.preventDefault(); el.setPointerCapture(e.pointerId);
       pid = e.pointerId; el.classList.add("held"); held.add(button); mouseOp("down", button);
       if (!pingTimer) pingTimer = setInterval(() => mouseOp("ping", "left"), 1000);
