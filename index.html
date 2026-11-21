@@ -1369,7 +1369,7 @@
       const bmToggle = (how) => {
         const kb = !bmKb;
         peaks = { x: [], y: [] }; cool = now + 1000;
-        buzz(kb ? [90, 90, 90] : [250]);
+        buzz(kb ? [200, 120, 200, 120, 200] : [700]);  // 見ずに使うことが多いので大きく：キーボード＝3 回、マウス＝長く 1 回
         clog("motion", `振って移る：操作の画面で${how} → ${kb ? "⌨ キーボード" : "🖱 マウス"}${buzzNote}`);
         bmSetKb(kb);
       };
