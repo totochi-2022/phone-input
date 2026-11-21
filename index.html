@@ -1020,14 +1020,14 @@
     const f = SPEED * (1 + Math.min(Math.hypot(dx, dy) / 12, 2));  // 速く動かすほど大きく動く
     acc.x += dx * f; acc.y += dy * f;
   }, () => click("left"));
-  // パッドの端に指が来たら震える（見ずになぞっていても境が分かるように）。内側へ 30px 戻ると次も震える
+  // パッドの端に指が来たら震える（見ずになぞっていても境が分かるように）。内側へ 55px 戻ると次も震える
   {
     const pad = $("pad"); let edgeOn = false;
     const edgeCheck = (e) => {
       const r = pad.getBoundingClientRect();
       const d = Math.min(e.clientX - r.left, r.right - e.clientX, e.clientY - r.top, r.bottom - e.clientY);
-      if (!edgeOn && d < 14) { edgeOn = true; if (navigator.vibrate) navigator.vibrate(40); }
-      else if (edgeOn && d > 30) edgeOn = false;
+      if (!edgeOn && d < 30) { edgeOn = true; if (navigator.vibrate) navigator.vibrate(120); }
+      else if (edgeOn && d > 55) edgeOn = false;
     };
     pad.addEventListener("pointerdown", (e) => { edgeOn = false; edgeCheck(e); });
     pad.addEventListener("pointermove", (e) => { if (e.buttons || e.pointerType === "touch") edgeCheck(e); });
