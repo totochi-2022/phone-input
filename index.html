@@ -1202,6 +1202,7 @@
   // 📳 動きの実験（⚙ 設定のいちばん下）：DeviceMotion（加速度・回転の速さ）で、振る（左右・上下・前後）・ひねる・回す・はたく・
   // 背中を叩く（トン・トントン）・向き（上向き・伏せ・立てる・横）を見分けて出すだけ。区別がつくかを試す用で、まだ何にもつながっていない
   {
+    let rot = null, rotQuiet = 0;
     let on = false, g = null, last = {}, peaks = { x: [], y: [], z: [] }, cool = 0, tapT = 0, tapN = 0, tapTimer = null, pose = "", poseT = 0, poseCand = "";
     const th = () => +$("motTh").value;
     $("motTh").oninput = () => { $("motThV").textContent = $("motTh").value; };
@@ -1253,6 +1254,13 @@
           clearTimeout(tapTimer);
           tapTimer = setTimeout(() => { hit(tapN >= 2 ? `トントン（${tapN} 回）` : "トン（1 回）", `z ${Math.abs(a.z).toFixed(1)}`); tapN = 0; }, 500);
         }
+      }
+      // 調べ用：基準より弱い回転も、ひと続きの回転（150 度/秒を超えてから 60 未満に戻るまで）の山を記録に残す
+      const rm = Math.max(ra, rb, rg);
+      if (rm > 150) { if (!rot || rm > rot.m) rot = { m: rm, a: r.alpha || 0, b: r.beta || 0, c: r.gamma || 0, gx: g.x, gy: g.y, gz: g.z }; rotQuiet = now; }
+      else if (rot && rm < 60 && now - rotQuiet > 200) {
+        clog("motion-raw", `回転の山 ${rot.m.toFixed(0)}：α${rot.a.toFixed(0)} β${rot.b.toFixed(0)} γ${rot.c.toFixed(0)}（重力 x${rot.gx.toFixed(0)} y${rot.gy.toFixed(0)} z${rot.gz.toFixed(0)}）`);
+        rot = null;
       }
       // 向き：重力の向きで。0.6 秒続いたら変わったとみなす
       const p = g.z > 8 ? "上向き（机に置いた形）" : g.z < -8 ? "伏せ（画面が下）" : Math.abs(g.y) > 8 ? (g.y > 0 ? "立てる（縦）" : "逆さに立てる") : Math.abs(g.x) > 8 ? "横に立てる" : "";
