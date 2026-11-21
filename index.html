@@ -295,7 +295,7 @@
 </div>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">📳 振って画面を移る</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
-  <label><input type="checkbox" id="shakeNav"> 上下に振る＝🤖 Claude に頼む、左右に振る＝▶ autotube、立てたまま 2 回回す＝🎮 操作</label>
+  <label><input type="checkbox" id="shakeNav"> はたく（手前・奥へ倒す）＝🤖 Claude に頼む、左右に振る＝▶ autotube、立てたまま 2 回回す＝🎮 操作</label>
   <label style="font-size:14px">感度 <span style="color:#888;font-size:12px">敏感</span> <input type="range" id="shakeTh" min="8" max="26" value="14" style="width:130px;vertical-align:middle"> <span style="color:#888;font-size:12px">鈍い</span>　<span id="shakeThV">14</span></label>
   <div style="color:#aaa;font-size:13px">🤖 Claude に頼むで話し終わったとき、2 回目を長押しすると割り込みで送る（Claude が作業中でも今すぐ読ませる。短く押すと順番待ち）</div>
 </div>
@@ -1308,7 +1308,7 @@
     document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { if (on && b.dataset.mode !== "input") $("motGo").click(); }));
   }
 
-  // 📳 振って画面を移る：上下に振る＝🤖 Claude に頼む、左右に振る＝▶ autotube、2 回回す＝🎮 操作（⚙ でオンオフ、最初はオン）。
+  // 📳 振って画面を移る：はたく（手前・奥へ倒す）＝🤖 Claude に頼む、左右に振る＝▶ autotube、2 回回す＝🎮 操作（⚙ でオンオフ、最初はオン）。
   // 動きの実験と同じ見分け方（重力抜きの加速が向きを変えて 3 回、1 秒以内）。ページが見えている間だけ。実験中は移らない
   {
     try { $("shakeNav").checked = localStorage.getItem("shakeNav") !== "0"; } catch (e) { $("shakeNav").checked = true; }
@@ -1328,6 +1328,14 @@
       if (now < cool) return;
       // 立てたまま回す（画面の面の中で回す。Android の Chrome では γ）を 1.5 秒以内に 2 回（向きは問わない）→ 🎮 操作
       const r = e.rotationRate || {}, ra = Math.abs(r.alpha || 0), rb = Math.abs(r.beta || 0), rg = Math.abs(r.gamma || 0);
+      // はたく（手前・奥へ倒す。Android の Chrome では α）を 1 回 → 🤖 Claude に頼む
+      if (!spin && ra > TH * 25 && ra > rb && ra > rg) {
+        spin = true; spins = []; peaks = { x: [], y: [] }; cool = now + 1200;
+        if (navigator.vibrate) navigator.vibrate(60);
+        clog("motion", "振って移る：はたく → 🤖 Claude に頼む");
+        setMode("test");
+        return;
+      }
       if (!spin && rg > TH * 25 && rg > ra && rg > rb) {
         spin = true; spins.push(now);
         while (spins.length && now - spins[0] > 1500) spins.shift();
@@ -1340,7 +1348,7 @@
         }
       } else if (spin && Math.max(ra, rb, rg) < 60) spin = false;
       if (spin) return;  // 回している最中の揺れを「振る」と見ない
-      for (const k of ["x", "y"]) {
+      for (const k of ["x"]) {  // 上下に振るはやめた（Claude に頼むは「はたく」に）
         const v = a[k], pk = peaks[k];
         if (Math.abs(v) <= TH) continue;
         const sg = Math.sign(v);
