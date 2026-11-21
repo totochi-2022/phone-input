@@ -991,6 +991,14 @@ def say_stop():
 
 
 class Handler(BaseHTTPRequestHandler):
+    def setup(self):
+        # HTTPS なら、このスレッドでハンドシェイク（20 秒で諦める）。受け口のスレッドを止めないため
+        if hasattr(self.request, "do_handshake"):
+            self.request.settimeout(20)
+            self.request.do_handshake()
+            self.request.settimeout(None)
+        super().setup()
+
     def _authed(self):
         q = parse_qs(urlparse(self.path).query)
         return secrets.compare_digest(q.get("t", [""])[0], TOKEN) or \
@@ -1268,7 +1276,9 @@ if __name__ == "__main__":
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(TLS_DIR / "cert.pem", TLS_DIR / "key.pem")
         https = ThreadingHTTPServer(("0.0.0.0", HTTPS_PORT), Handler)
-        https.socket = ctx.wrap_socket(https.socket, server_side=True)
+        # 手続き（TLS のハンドシェイク）は受け付けた後のスレッドで（下の Handler.setup）。受け口でやると、つなぎかけで
+        # 止まったスマホが 1 台いるだけで、ほかの全部の HTTPS が待たされて「すぐ切れる・操作できない」になっていた（2026-11-22）
+        https.socket = ctx.wrap_socket(https.socket, server_side=True, do_handshake_on_connect=False)
         threading.Thread(target=https.serve_forever, daemon=True).start()
         print(f"HTTPS: {HTTPS_PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
