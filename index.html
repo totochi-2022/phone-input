@@ -49,17 +49,22 @@
   #bmView iframe { width: 100%; flex: 1; min-height: 0; border: 0; background: #111; }
   /* ブックマークの画面の下にマウスのパッドと 3 つのボタン（入力の画面のものをそのまま移して使う） */
   #bmPad { flex: none; padding: 4px 12px 10px; background: #111; border-top: 1px solid #333; }
-  #bmPad .padwrap { height: 28vh; margin-top: 4px; }
+  /* マウスとキーボードを同じ高さに（--bmh）。マウス＝パッド＋クリックの段（約 46px）、キーボード＝段を高さいっぱいに伸ばす */
+  #bmPad { --bmh: 38vh; }
+  #bmPad .padwrap { height: calc(var(--bmh) - 46px); margin-top: 4px; }
+  #bmPad .row { height: 40px; }
+  #bmPad .row button { height: 40px; padding: 0 4px; }
   #bmPad .row { margin-top: 6px; }
   #bmPad .line { margin-top: 2px; }
-  #bmPad .row button { padding: 11px 4px; }
   /* 上の端の帯：横になぞる（か押す）とマウス⇔キーボード */
   #bmSwitch { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 -12px; padding: 7px 0;
               font-size: 13px; color: #888; touch-action: none; user-select: none; -webkit-user-select: none; }
   #bmSwitch b { padding: 2px 10px; border-radius: 10px; font-weight: normal; }
   #bmSwitch b.on { background: #2a5bd7; color: #fff; }
   #bmPad .pckb { display: none; margin-top: 4px !important; }
-  #bmPad.kb .pckb { display: grid; }
+  #bmPad.kb .pckb { display: grid; height: var(--bmh); grid-template-rows: 0.7fr repeat(5, 1fr); }
+  #bmPad .pckb .r { align-items: stretch; }
+  #bmPad .pckb .k, #bmPad .pckb .k.f { height: auto; }
   #bmPad.kb .padwrap, #bmPad.kb #mouseRow { display: none; }
   body.bm #inputView { display: none; }
   body.bm #bmView { display: flex; }
