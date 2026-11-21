@@ -1244,7 +1244,7 @@
           const m = Math.max(ra, rb, rg);
           if (m > RT && m > Math.hypot(a.x, a.y, a.z) * 20) {
             const name = m === rg ? "ひねる（縦の軸で手首を返す）" : m === rb ? "はたく（手前・奥へ倒す）" : "回す（画面を見たまま時計の針の向き）";
-            hit(name, `${m.toFixed(0)} 度/秒`); peaks = { x: [], y: [], z: [] }; cool = now + 900; done = true;
+            hit(name, `${m.toFixed(0)} 度/秒（α${(r.alpha || 0).toFixed(0)} β${(r.beta || 0).toFixed(0)} γ${(r.gamma || 0).toFixed(0)}、重力 x${g.x.toFixed(0)} y${g.y.toFixed(0)} z${g.z.toFixed(0)}）`); peaks = { x: [], y: [], z: [] }; cool = now + 900; done = true;
           }
         }
         // 背中を叩く：画面に垂直（z）だけ短く強く、ほかの軸と回転は小さい。0.5 秒以内に 2 回ならトントン
