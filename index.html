@@ -212,7 +212,7 @@
 <tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
 <tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
 <tr><td>🤖 Claude に頼む</td><td>1 回目に押す＝聞き始める。話し終わって 2 回目：短く押す＝割り込まずに頼む、長押し（0.5 秒で震えてすぐ終わる）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
-<tr><td>振る</td><td>上下に振る＝🤖 Claude に頼むへ、左右に振る＝🎮 操作へ（⚙ でオンオフ）</td></tr>
+<tr><td>振る</td><td>上下に振る＝🤖 Claude に頼むへ、左右に振る＝🎮 操作へ、立てたまま 2 回回す＝▶ autotube へ（⚙ でオンオフ）</td></tr>
 <tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（0.5 秒で震えてすぐ送る）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
 </table>
 <h3>窓・タブ（F7・F8・かな）</h3>
@@ -293,7 +293,7 @@
 </div>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">📳 振って画面を移る</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
-  <label><input type="checkbox" id="shakeNav"> 上下に振る＝🤖 Claude に頼む、左右に振る＝🎮 操作</label>
+  <label><input type="checkbox" id="shakeNav"> 上下に振る＝🤖 Claude に頼む、左右に振る＝🎮 操作、立てたまま 2 回回す＝▶ autotube</label>
   <div style="color:#aaa;font-size:13px">🤖 Claude に頼むで話し終わったとき、2 回目を長押しすると割り込みで送る（Claude が作業中でも今すぐ読ませる。短く押すと順番待ち）</div>
 </div>
 <p style="color:#aaa;font-size:13px;margin-top:14px">文字の欄・マウス・キーボードは 🎮 操作の画面の下にあります。</p>
@@ -1311,7 +1311,7 @@
     try { $("shakeNav").checked = localStorage.getItem("shakeNav") !== "0"; } catch (e) { $("shakeNav").checked = true; }
     $("shakeNav").onchange = () => { try { localStorage.setItem("shakeNav", $("shakeNav").checked ? "1" : "0"); } catch (e) {} };
     const TH = 14;
-    let g = null, peaks = { x: [], y: [] }, cool = 0;
+    let g = null, peaks = { x: [], y: [] }, cool = 0, spin = false, spins = [];
     window.addEventListener("devicemotion", (e) => {
       if (!$("shakeNav").checked || window.motTesting || document.hidden) return;
       const ig = e.accelerationIncludingGravity || {}, now = e.timeStamp || performance.now();
@@ -1319,6 +1319,20 @@
       g = g ? { x: g.x * 0.9 + ig.x * 0.1, y: g.y * 0.9 + ig.y * 0.1, z: g.z * 0.9 + ig.z * 0.1 } : { x: ig.x, y: ig.y, z: ig.z };
       const a = (e.acceleration && e.acceleration.x != null) ? e.acceleration : { x: ig.x - g.x, y: ig.y - g.y };
       if (now < cool) return;
+      // 立てたまま回す（画面の面の中で回す。Android の Chrome では γ）を 1.5 秒以内に 2 回 → autotube
+      const r = e.rotationRate || {}, ra = Math.abs(r.alpha || 0), rb = Math.abs(r.beta || 0), rg = Math.abs(r.gamma || 0);
+      if (!spin && rg > 350 && rg > ra && rg > rb) {
+        spin = true; spins.push(now);
+        while (spins.length && now - spins[0] > 1500) spins.shift();
+        if (spins.length >= 2) {
+          spins = []; peaks = { x: [], y: [] }; cool = now + 1200;
+          if (navigator.vibrate) navigator.vibrate(60);
+          clog("motion", "振って移る：2 回回す → ▶ autotube");
+          setMode("at");
+          return;
+        }
+      } else if (spin && Math.max(ra, rb, rg) < 60) spin = false;
+      if (spin) return;  // 回している最中の揺れを「振る」と見ない
       for (const k of ["x", "y"]) {
         const v = a[k], pk = peaks[k];
         if (Math.abs(v) <= TH) continue;
