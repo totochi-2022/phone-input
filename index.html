@@ -56,6 +56,8 @@
   #bmPad .row button { height: 40px; padding: 0 4px; }
   #bmPad .row { margin-top: 6px; }
   #bmPad .line { margin-top: 2px; }
+  #send.long { background: #d7802a; color: #fff; }  /* 長押し＝Enter 付きになったしるし */
+  #bmPad #status { margin: 2px 0 0; font-size: 12px; }
   /* 上の端の帯：横になぞる（か押す）とマウス⇔キーボード */
   #bmSwitch { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 -12px; padding: 7px 0;
               font-size: 13px; color: #888; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -77,7 +79,8 @@
   #testView > #chat { flex: 1 1 auto; }
   #testView .opts { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
   #testView .opts label { white-space: nowrap; }
-  .modebar [data-mode="test"] { flex: 0 0 auto; padding: 9px 12px; }
+  .modebar [data-mode="test"] { flex: 1.6 1 0; }
+  .modebar [data-mode="input"] { flex: 0 0 auto; padding: 9px 12px; }
   .vo { padding: 14px 8px; font-size: 19px; border-radius: 12px; }
   .vo.rec { background: #c0392b; color: #fff; }
   .vorow { display: flex; gap: 6px; } .vorow button { flex: 1; padding: 8px 4px; font-size: 14px; }
@@ -188,10 +191,10 @@
 </head>
 <body>
 <div class="modebar" id="modebar">
-  <button data-mode="input">⌨ 入力</button>
+  <button data-mode="bm" title="テレビの Brave のブックマークを開く（autotube の /bookmarks）・マウス・キーボード">🔖 ブックマーク</button>
   <button data-mode="at">▶ autotube</button>
-  <button data-mode="bm" title="テレビの Brave のブックマークを開く（autotube の /bookmarks）">🔖 ブックマーク</button>
-  <button data-mode="test" title="Claude：音声で常駐の Claude に頼む・返事を見る・読む">🤖</button>
+  <button data-mode="test" title="Claude：音声で常駐の Claude に頼む・返事を見る・読む">🤖 Claude に頼む</button>
+  <button data-mode="input" title="設定・使い方・QR コード">⚙</button>
 </div>
 <div id="help">
 <button id="helpClose">✕ 閉じる</button>
@@ -205,6 +208,7 @@
 <tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
 <tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
 <tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
+<tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（橙になる）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
 </table>
 <h3>窓・タブ（F7・F8・かな）</h3>
 <table>
@@ -281,10 +285,7 @@
 </div>
 <div class="pckb" id="pckb"></div>
 <h2>設定</h2>
-<div class="row">
-  <label><input type="checkbox" id="enter"> 送信後に Enter</label>
-  <label><input type="checkbox" id="auto"> 自動送信（音声入力が止まって 1 秒後）</label>
-</div>
+<p style="color:#aaa;font-size:14px">入力の画面はやめて、マウス・キーボード・文字の欄はブックマークの画面の下に移しました。</p>
 <p style="text-align:center;margin-top:16px"><button id="helpBtn" style="width:auto;padding:8px 16px;margin-right:8px">？ 使い方・ショートカット</button><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
 </div><!-- /inputView -->
 <link rel="stylesheet" href="/vendor/hljs-dark.min.css">
@@ -317,10 +318,6 @@
   }
   const standalone = matchMedia("(display-mode: standalone)").matches;  // アプリとして開いた（縦の固定は manifest がする）
   const $ = (id) => document.getElementById(id);
-  try { $("enter").checked = localStorage.getItem("enter") === "1"; } catch (e) {}
-  try { $("auto").checked = localStorage.getItem("auto") !== "0"; } catch (e) { $("auto").checked = true; }
-  $("auto").onchange = () => { try { localStorage.setItem("auto", $("auto").checked ? "1" : "0"); } catch (e) {} };
-  $("enter").onchange = () => { try { localStorage.setItem("enter", $("enter").checked ? "1" : "0"); } catch (e) {} };
 
   // 縦に固定：スマホの回転を有効にしていても、このリモコンだけは縦のまま。ページから向きを固定できるのは全画面のときだけなので、
   // 画面に触れたら全画面にして portrait に固定する（全画面から抜けたら、次に触れたときにまた）。
@@ -354,7 +351,7 @@
   const jaLine = document.querySelector("#pJa .line");
   function movePad(toBm) {
     const pw = document.querySelector(".padwrap"), row = $("mouseRow"), kb = $("pckb");
-    if (toBm) { $("bmPad").prepend(jaLine); $("bmPad").append(pw, row, kb); bmSetKb(bmKb); }
+    if (toBm) { $("bmPad").prepend(jaLine, $("status")); $("bmPad").append(pw, row, kb); bmSetKb(bmKb); }
     else if (pw.parentNode === $("bmPad")) { $("pJa").append(jaLine); padHome.after(pw, row); kbHome.after(kb); }
   }
   let bmKb = false;
@@ -386,7 +383,6 @@
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
-    movePad(mode === "bm");
     if (mode === "test") { fitViews(); chatSig = ""; setTimeout(chatRefresh, 0); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {
@@ -402,9 +398,11 @@
     try { localStorage.setItem("mode", mode); } catch (e) {}
   }
   document.querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
-  let savedMode = "input";
-  try { savedMode = localStorage.getItem("mode") || "input"; } catch (e) {}
+  movePad(true);  // 文字の欄・マウス・キーボードはブックマークの画面の下にずっと置く（入力の画面はやめた。⚙ は設定だけ）
+  let savedMode = "bm";
+  try { savedMode = localStorage.getItem("mode") || "bm"; } catch (e) {}
   savedMode = new URLSearchParams(location.search).get("mode") || savedMode;  // ?mode=test などで最初の画面を選べる
+  if (savedMode === "input" && !new URLSearchParams(location.search).get("mode")) savedMode = "bm";  // 前の「入力」はブックマークへ
   setMode(savedMode);
 
   // 試し：音声認識（Chrome の Web Speech API、HTTPS のときだけ使える）で聞き取って、テレビに打つ（/type）か、常駐の Claude に頼む（/claude）
@@ -889,45 +887,39 @@
     } catch (e) { if (path !== "/clientlog") clog("send", `${path}: ${e.message}`); throw e; }
   }
 
-  // 送る前に入力欄を空にして、自動送信の待ちも取り消す（二重送信を防ぐ）
-  $("send").onclick = async () => {
-    clearTimeout(autoTimer); bulk = false;
+  // 送信：短く押す＝文字だけ、長押し（0.5 秒）＝文字のあとに Enter。送る前に入力欄を空にする（二重送信を防ぐ）
+  async function sendText(enter) {
     const text = $("text").value;
-    if (!text && !$("enter").checked) return;
+    if (!text && !enter) return;
     $("text").value = ""; fitText();
     try {
-      await post("/type", { text, enter: $("enter").checked });
-      status("送信しました");
+      await post("/type", { text, enter });
+      status(enter ? "送信しました（Enter 付き）" : "送信しました");
     } catch (e) {
       if (!$("text").value) { $("text").value = text; fitText(); }  // 失敗したら書いた文を戻す
       status("失敗: " + e.message, true);
     }
   };
 
-  // 自動送信：音声入力などでまとめて文字が入ったら、入力が止まって 1 秒後に送る（1 文字ずつの手打ちでは送らない）
-  let autoTimer = null, bulk = false, taComposing = false;
-  $("text").addEventListener("keydown", (e) => {
-    if ((e.key === "Enter" || e.keyCode === 13) && !e.isComposing && !taComposing) { e.preventDefault(); $("send").click(); }
+  {
+    let t0 = 0, lt = null;
+    const b = $("send");
+    b.addEventListener("pointerdown", () => { t0 = Date.now(); lt = setTimeout(() => b.classList.add("long"), 500); });
+    const end = (go) => { clearTimeout(lt); const long = Date.now() - t0 >= 500; b.classList.remove("long"); if (go && t0) sendText(long); t0 = 0; };
+    b.addEventListener("pointerup", () => end(true));
+    b.addEventListener("pointercancel", () => end(false));
+    b.addEventListener("contextmenu", (e) => e.preventDefault());  // 長押しでメニューを出さない
+    b.onclick = (e) => { if (e.detail === 0) sendText(false); };  // キーボード操作の click だけ（指は pointerup で送る）
+  }
+  let taComposing = false;
+  $("text").addEventListener("keydown", (e) => {  // スマホのキーボードの改行キー＝短く押したのと同じ（文字だけ）
+    if ((e.key === "Enter" || e.keyCode === 13) && !e.isComposing && !taComposing) { e.preventDefault(); sendText(false); }
   });
   // 文字が増えたら下に広がる（最大 8 行）。送信して空になれば 1 行に戻る
   function fitText() { const t = $("text"); t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; }
   $("text").addEventListener("input", fitText);
   $("text").addEventListener("compositionstart", () => { taComposing = true; });
-  // Gboard のマイクは話している間「変換中」のまま文字を入れる。1 秒たっても変換中なら、変換が終わったときにもう一度待つ
-  function autoArm() {
-    clearTimeout(autoTimer);
-    if (bulk) autoTimer = setTimeout(() => {
-      if (taComposing) return;
-      bulk = false;
-      if ($("text").value.trim()) $("send").click();
-    }, 1000);
-  }
-  $("text").addEventListener("compositionend", () => { taComposing = false; if ($("auto").checked) autoArm(); });
-  $("text").addEventListener("input", (e) => {
-    if (!$("auto").checked) return;
-    if (e.inputType === "insertFromPaste" || (e.data && e.data.length > 1)) bulk = true;
-    autoArm();
-  });
+  $("text").addEventListener("compositionend", () => { taComposing = false; });
 
   // キー入力を順番に送る（PC キーボードで使う）
   let chain = Promise.resolve();
