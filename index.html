@@ -523,14 +523,22 @@
   {
     let t0 = 0, lt = null;
     const b = $("voClaude");
-    b.addEventListener("pointerdown", () => { t0 = Date.now(); if (!voRec) lt = setTimeout(() => { b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(60); }, 500); });
+    // 0.5 秒押し続けたら、離すのを待たずにその場で（震えて）割り込みの聞き取りを始める
+    b.addEventListener("pointerdown", () => {
+      t0 = Date.now();
+      if (!voRec) lt = setTimeout(() => {
+        t0 = 0; b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(80);
+        $("voCut").checked = true; voListen(b, askClaude);
+        $("voText").textContent = "聞いています…（割り込みで送ります）";
+        setTimeout(() => b.classList.remove("long"), 400);
+      }, 500);
+    });
     const end = (go) => {
-      clearTimeout(lt); b.classList.remove("long");
-      if (!go || !t0) { t0 = 0; return; }
-      const long = Date.now() - t0 >= 500; t0 = 0;
-      if (!voRec) $("voCut").checked = long;  // 聞いている途中の 2 回目（そこで終わる）は決め直さない
+      clearTimeout(lt);
+      if (!go || !t0) { t0 = 0; return; }  // 長押しはもう始めた
+      t0 = 0;
+      if (!voRec) $("voCut").checked = false;  // 短く押す＝割り込まない（聞いている途中の 2 回目はそこで終わる）
       voListen(b, askClaude);
-      if (voRec && long) $("voText").textContent = "聞いています…（割り込みで送ります）";
     };
     b.addEventListener("pointerup", () => end(true));
     b.addEventListener("pointercancel", () => end(false));
@@ -921,8 +929,13 @@
   {
     let t0 = 0, lt = null;
     const b = $("send");
-    b.addEventListener("pointerdown", () => { t0 = Date.now(); lt = setTimeout(() => { b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(60); }, 500); });
-    const end = (go) => { clearTimeout(lt); const long = Date.now() - t0 >= 500; b.classList.remove("long"); if (go && t0) sendText(long); t0 = 0; };
+    // 0.5 秒押し続けたら、離すのを待たずにその場で（震えて）Enter 付きで送る
+    b.addEventListener("pointerdown", () => {
+      t0 = Date.now();
+      lt = setTimeout(() => { t0 = 0; b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(80); sendText(true);
+                              setTimeout(() => b.classList.remove("long"), 400); }, 500);
+    });
+    const end = (go) => { clearTimeout(lt); if (go && t0) sendText(false); t0 = 0; };
     b.addEventListener("pointerup", () => end(true));
     b.addEventListener("pointercancel", () => end(false));
     b.addEventListener("contextmenu", (e) => e.preventDefault());  // 長押しでメニューを出さない
