@@ -51,6 +51,7 @@
   #bmPad { flex: none; padding: 4px 12px 10px; background: #111; border-top: 1px solid #333; }
   #bmPad .padwrap { height: 28vh; margin-top: 4px; }
   #bmPad .row { margin-top: 6px; }
+  #bmPad .line { margin-top: 2px; }
   #bmPad .row button { padding: 11px 4px; }
   /* 上の端の帯：横になぞる（か押す）とマウス⇔キーボード */
   #bmSwitch { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 -12px; padding: 7px 0;
@@ -193,7 +194,7 @@
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる</td></tr>
-<tr><td>🔖 の下</td><td>マウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る</td></tr>
+<tr><td>🔖 の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
 <tr><td>F6 ロック</td><td>F6 を押さえたまま Shift＝F6 を押しっぱなし（動画の操作を続けて打てる）。もう一度 F6 か Shift で解除</td></tr>
 <tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
@@ -344,10 +345,12 @@
   // PC キーボードも一緒に移し、上の端の帯（#bmSwitch）を横になぞるか押すとマウス⇔キーボードを切り替える
   const kbHome = document.createComment("pckb");
   $("pckb").before(kbHome);
+  // 日本語の欄（🎤・送信）もブックマークの画面のいちばん上に移す
+  const jaLine = document.querySelector("#pJa .line");
   function movePad(toBm) {
     const pw = document.querySelector(".padwrap"), row = $("mouseRow"), kb = $("pckb");
-    if (toBm) { $("bmPad").append(pw, row, kb); bmSetKb(bmKb); }
-    else if (pw.parentNode === $("bmPad")) { padHome.after(pw, row); kbHome.after(kb); }
+    if (toBm) { $("bmPad").prepend(jaLine); $("bmPad").append(pw, row, kb); bmSetKb(bmKb); }
+    else if (pw.parentNode === $("bmPad")) { $("pJa").append(jaLine); padHome.after(pw, row); kbHome.after(kb); }
   }
   let bmKb = false;
   try { bmKb = localStorage.getItem("bmKb") === "1"; } catch (e) {}
