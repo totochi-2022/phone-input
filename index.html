@@ -205,7 +205,7 @@
 <button id="helpClose">✕ 閉じる</button>
 <h3>この画面（リモコン）</h3>
 <table>
-<tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール</td></tr>
+<tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる</td></tr>
 <tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
@@ -1020,6 +1020,18 @@
     const f = SPEED * (1 + Math.min(Math.hypot(dx, dy) / 12, 2));  // 速く動かすほど大きく動く
     acc.x += dx * f; acc.y += dy * f;
   }, () => click("left"));
+  // パッドの端に指が来たら震える（見ずになぞっていても境が分かるように）。内側へ 30px 戻ると次も震える
+  {
+    const pad = $("pad"); let edgeOn = false;
+    const edgeCheck = (e) => {
+      const r = pad.getBoundingClientRect();
+      const d = Math.min(e.clientX - r.left, r.right - e.clientX, e.clientY - r.top, r.bottom - e.clientY);
+      if (!edgeOn && d < 14) { edgeOn = true; if (navigator.vibrate) navigator.vibrate(40); }
+      else if (edgeOn && d > 30) edgeOn = false;
+    };
+    pad.addEventListener("pointerdown", (e) => { edgeOn = false; edgeCheck(e); });
+    pad.addEventListener("pointermove", (e) => { if (e.buttons || e.pointerType === "touch") edgeCheck(e); });
+  }
   // スクロール：帯を押している間ずっと動く。真ん中より上なら上へ、下なら下へ。端に近いほど速い
   const wheel = $("wheel");
   let wheelRate = 0, wheelTimer = null;
