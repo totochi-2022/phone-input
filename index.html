@@ -1214,6 +1214,7 @@
       $("motLog").prepend(d);
       while ($("motLog").children.length > 30) $("motLog").lastChild.remove();
       if (navigator.vibrate) navigator.vibrate(60);
+      clog("motion", name + (detail ? " " + detail : ""));  // Claude が client.log で見られるように
     };
     const AX = { x: ["左右に振る", "x"], y: ["上下に振る", "y"], z: ["前後に振る（手前・奥）", "z"] };
     function onMotion(e) {
