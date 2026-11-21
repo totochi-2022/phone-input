@@ -9,6 +9,7 @@ WSL で動かしたときは、Windows 側で今フォーカスしているウ�
 import base64
 import json
 import os
+import re
 import secrets
 import socket
 import struct
@@ -899,9 +900,34 @@ ZUNDAMON_STYLES = {3, 1, 7, 22, 38, 75, 76}  # ノーマル・あまあま・ツ
 
 
 def tts(text, speaker=ZUNDAMON):
-    """VOICEVOX でずんだもんの声の WAV を作る（speaker は ZUNDAMON_STYLES のどれか）"""
+    """VOICEVOX でずんだもんの声の WAV を作る（speaker は ZUNDAMON_STYLES のどれか）。
+    長い文は「、」などで 40 文字ほどに切って作り、つなげる（VOICEVOX は一番長い文のぶんのメモリを手放さないため。
+    voicevox_engine #1506・#1691。autotube の dub.split_for_tts と同じ考え）"""
     if speaker not in ZUNDAMON_STYLES:
         speaker = ZUNDAMON
+    parts, cur = [], ""
+    for piece in re.split(r"(?<=[。！？!?、，,])", text):
+        if cur and len(cur) + len(piece) > 40:
+            parts.append(cur); cur = ""
+        cur += piece
+        while len(cur) > 60:
+            parts.append(cur[:40]); cur = cur[40:]
+    if cur.strip():
+        parts.append(cur)
+    if len(parts) <= 1:
+        return tts_one(text, speaker)
+    import io, wave
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        for i, p in enumerate(parts):
+            with wave.open(io.BytesIO(tts_one(p, speaker))) as r:
+                if i == 0:
+                    w.setparams(r.getparams())
+                w.writeframes(r.readframes(r.getnframes()))
+    return out.getvalue()
+
+
+def tts_one(text, speaker):
     import urllib.request
     from urllib.parse import quote
     q = json.loads(urllib.request.urlopen(urllib.request.Request(
