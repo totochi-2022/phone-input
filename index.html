@@ -294,6 +294,7 @@
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">📳 振って画面を移る</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
   <label><input type="checkbox" id="shakeNav"> 上下に振る＝🤖 Claude に頼む、左右に振る＝▶ autotube、立てたまま 2 回回す＝🎮 操作</label>
+  <label style="font-size:14px">感度 <span style="color:#888;font-size:12px">敏感</span> <input type="range" id="shakeTh" min="8" max="26" value="14" style="width:130px;vertical-align:middle"> <span style="color:#888;font-size:12px">鈍い</span>　<span id="shakeThV">14</span></label>
   <div style="color:#aaa;font-size:13px">🤖 Claude に頼むで話し終わったとき、2 回目を長押しすると割り込みで送る（Claude が作業中でも今すぐ読ませる。短く押すと順番待ち）</div>
 </div>
 <p style="color:#aaa;font-size:13px;margin-top:14px">文字の欄・マウス・キーボードは 🎮 操作の画面の下にあります。</p>
@@ -1310,7 +1311,11 @@
   {
     try { $("shakeNav").checked = localStorage.getItem("shakeNav") !== "0"; } catch (e) { $("shakeNav").checked = true; }
     $("shakeNav").onchange = () => { try { localStorage.setItem("shakeNav", $("shakeNav").checked ? "1" : "0"); } catch (e) {} };
-    const TH = 14;
+    // 感度：振る＝重力抜きの加速（m/s²）の基準、回す＝その 25 倍（度／秒。14 なら 350）。小さいほど敏感
+    let TH = 14;
+    try { TH = +(localStorage.getItem("shakeTh") || 14); } catch (e) {}
+    $("shakeTh").value = TH; $("shakeThV").textContent = TH;
+    $("shakeTh").oninput = () => { TH = +$("shakeTh").value; $("shakeThV").textContent = TH; try { localStorage.setItem("shakeTh", TH); } catch (e) {} };
     let g = null, peaks = { x: [], y: [] }, cool = 0, spin = false, spins = [];
     window.addEventListener("devicemotion", (e) => {
       if (!$("shakeNav").checked || window.motTesting || document.hidden) return;
@@ -1321,7 +1326,7 @@
       if (now < cool) return;
       // 立てたまま回す（画面の面の中で回す。Android の Chrome では γ）を 1.5 秒以内に 2 回（向きは問わない）→ 🎮 操作
       const r = e.rotationRate || {}, ra = Math.abs(r.alpha || 0), rb = Math.abs(r.beta || 0), rg = Math.abs(r.gamma || 0);
-      if (!spin && rg > 350 && rg > ra && rg > rb) {
+      if (!spin && rg > TH * 25 && rg > ra && rg > rb) {
         spin = true; spins.push(now);
         while (spins.length && now - spins[0] > 1500) spins.shift();
         if (spins.length >= 2) {
