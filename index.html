@@ -186,6 +186,10 @@
   .pckb .k.on { background: #2a5bd7; color: #fff; }
   .pckb .k.lock { background: #d7802a; color: #fff; }
   .pckb .k.down { background: #777; }
+  #motLive { background: #181818; border: 1px solid #333; border-radius: 6px; padding: 6px 8px; font-size: 12px; line-height: 1.5; margin: 8px 0; white-space: pre; overflow-x: auto; }
+  #motLog div { padding: 6px 8px; border-bottom: 1px solid #2a2a2a; font-size: 15px; }
+  #motLog div b { color: #ffd76a; font-weight: normal; }
+  #motLog div span { color: #888; font-size: 12px; margin-left: 8px; }
 </style>
 </head>
 <body>
@@ -289,6 +293,15 @@
 </div>
 <p style="color:#aaa;font-size:13px;margin-top:14px">文字の欄・マウス・キーボードは 🎮 操作の画面の下にあります。</p>
 <p style="text-align:center;margin-top:16px"><button id="helpBtn" style="width:auto;padding:8px 16px;margin-right:8px">？ 使い方・ショートカット</button><button id="qrBtn" style="width:auto;padding:8px 16px" title="スマホで開くための QR コード">QR コード</button></p>
+<div id="mot">
+<h3 style="font-size:15px;color:#8ab4ff;margin:22px 0 6px">📳 動きの実験（スマホを振る・ひねる・叩く）</h3>
+<p style="color:#aaa;font-size:13px;margin:0 0 6px">「始める」を押してからスマホを動かすと、見分けた動きが下に出て震えます。区別がつくか試す用（まだ何にもつながっていない）。</p>
+<div class="row" style="align-items:center"><button id="motGo" style="flex:0 0 auto;width:auto;padding:8px 16px">▶ 始める</button>
+  <label style="font-size:13px">強さの基準 <input type="range" id="motTh" min="6" max="30" value="14" style="width:110px;vertical-align:middle"> <span id="motThV">14</span></label>
+  <button id="motClr" style="flex:0 0 auto;width:auto;padding:8px 12px">消す</button></div>
+<pre id="motLive">（止まっています）</pre>
+<div id="motLog"></div>
+</div>
 </div><!-- /inputView -->
 <link rel="stylesheet" href="/vendor/hljs-dark.min.css">
 <script src="/vendor/highlight.min.js"></script><!-- 道具の使用のコマンド・出力の色付け -->
@@ -1185,6 +1198,95 @@
       catch (e) { status("失敗: " + e.message, true); }
     };
   });
+
+  // 📳 動きの実験（⚙ 設定のいちばん下）：DeviceMotion（加速度・回転の速さ）で、振る（左右・上下・前後）・ひねる・回す・はたく・
+  // 背中を叩く（トン・トントン）・向き（上向き・伏せ・立てる・横）を見分けて出すだけ。区別がつくかを試す用で、まだ何にもつながっていない
+  {
+    let on = false, g = null, last = {}, peaks = { x: [], y: [], z: [] }, cool = 0, tapT = 0, tapN = 0, tapTimer = null, pose = "", poseT = 0, poseCand = "";
+    const th = () => +$("motTh").value;
+    $("motTh").oninput = () => { $("motThV").textContent = $("motTh").value; };
+    $("motClr").onclick = () => { $("motLog").innerHTML = ""; };
+    const hit = (name, detail) => {
+      const d = document.createElement("div");
+      d.innerHTML = `<b></b><span></span>`;
+      d.querySelector("b").textContent = name;
+      d.querySelector("span").textContent = new Date().toLocaleTimeString() + (detail ? "　" + detail : "");
+      $("motLog").prepend(d);
+      while ($("motLog").children.length > 30) $("motLog").lastChild.remove();
+      if (navigator.vibrate) navigator.vibrate(60);
+    };
+    const AX = { x: ["左右に振る", "x"], y: ["上下に振る", "y"], z: ["前後に振る（手前・奥）", "z"] };
+    function onMotion(e) {
+      const ig = e.accelerationIncludingGravity || {}, now = e.timeStamp || performance.now();
+      if (ig.x == null) return;
+      g = g ? { x: g.x * 0.9 + ig.x * 0.1, y: g.y * 0.9 + ig.y * 0.1, z: g.z * 0.9 + ig.z * 0.1 } : { x: ig.x, y: ig.y, z: ig.z };
+      const a = (e.acceleration && e.acceleration.x != null) ? e.acceleration : { x: ig.x - g.x, y: ig.y - g.y, z: ig.z - g.z };
+      const r = e.rotationRate || {}; const ra = Math.abs(r.alpha || 0), rb = Math.abs(r.beta || 0), rg = Math.abs(r.gamma || 0);
+      last = { a, r, g };
+      const T = th();
+      if (now > cool) {
+        // 振る：同じ向きの軸で、強い加速が向きを変えて 3 回（往復 1 回半）1 秒以内に来たら
+        let done = false;
+        for (const k of ["x", "y", "z"]) {
+          const v = a[k];
+          const pk = peaks[k];
+          if (Math.abs(v) > T) {
+            const sg = Math.sign(v);
+            if (!pk.length || pk[pk.length - 1].s !== sg) pk.push({ s: sg, t: now, v: Math.abs(v) });
+            while (pk.length && now - pk[0].t > 1000) pk.shift();
+            if (pk.length >= 3) { hit(AX[k][0], `最大 ${Math.max(...pk.map((p) => p.v)).toFixed(0)}`); peaks = { x: [], y: [], z: [] }; cool = now + 900; done = true; break; }
+          }
+        }
+        // ひねる・回す・はたく：回転の速さ（度／秒）が大きい。振るより回転が勝っているとき
+        if (!done) {
+          const RT = T * 25;  // 基準 14 なら 350 度／秒
+          const m = Math.max(ra, rb, rg);
+          if (m > RT && m > Math.hypot(a.x, a.y, a.z) * 20) {
+            const name = m === rg ? "ひねる（縦の軸で手首を返す）" : m === rb ? "はたく（手前・奥へ倒す）" : "回す（画面を見たまま時計の針の向き）";
+            hit(name, `${m.toFixed(0)} 度/秒`); peaks = { x: [], y: [], z: [] }; cool = now + 900; done = true;
+          }
+        }
+        // 背中を叩く：画面に垂直（z）だけ短く強く、ほかの軸と回転は小さい。0.5 秒以内に 2 回ならトントン
+        if (!done && Math.abs(a.z) > T * 0.3 && Math.abs(a.z) < T && Math.abs(a.x) < T * 0.15 && Math.abs(a.y) < T * 0.15 && Math.max(ra, rb, rg) < 60 && now - tapT > 120) {
+          tapN = now - tapT < 500 ? tapN + 1 : 1; tapT = now;
+          clearTimeout(tapTimer);
+          tapTimer = setTimeout(() => { hit(tapN >= 2 ? `トントン（${tapN} 回）` : "トン（1 回）", `z ${Math.abs(a.z).toFixed(1)}`); tapN = 0; }, 500);
+        }
+      }
+      // 向き：重力の向きで。0.6 秒続いたら変わったとみなす
+      const p = g.z > 8 ? "上向き（机に置いた形）" : g.z < -8 ? "伏せ（画面が下）" : Math.abs(g.y) > 8 ? (g.y > 0 ? "立てる（縦）" : "逆さに立てる") : Math.abs(g.x) > 8 ? "横に立てる" : "";
+      if (p && p !== pose) { if (p !== poseCand) { poseCand = p; poseT = now; } else if (now - poseT > 600) { if (pose) hit("向き：" + p); pose = p; } }
+    }
+    let liveTimer = null;
+    const f = (v) => (v == null ? "  -  " : (v >= 0 ? " " : "") + v.toFixed(1)).padStart(6);
+    function live() {
+      const { a, r, g: gg } = last;
+      if (!a) { $("motLive").textContent = "センサーの値を待っています…（来なければこのブラウザでは使えません）"; return; }
+      $("motLive").textContent =
+        `加速（重力抜き） x${f(a.x)} y${f(a.y)} z${f(a.z)}  m/s²\n` +
+        `回転の速さ   α${f(r.alpha)} β${f(r.beta)} γ${f(r.gamma)}  度/秒\n` +
+        `重力の向き   x${f(gg.x)} y${f(gg.y)} z${f(gg.z)}\n` +
+        `今の向き：${pose || "-"}`;
+    }
+    $("motGo").onclick = async () => {
+      if (on) {
+        on = false; window.removeEventListener("devicemotion", onMotion); clearInterval(liveTimer);
+        $("motGo").textContent = "▶ 始める"; $("motLive").textContent = "（止まっています）"; return;
+      }
+      try {  // iPhone は許可が要る（Android の Chrome は要らない）
+        if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === "function") {
+          if (await DeviceMotionEvent.requestPermission() !== "granted") { $("motLive").textContent = "動きのセンサーの許可がありません"; return; }
+        }
+      } catch (err) { $("motLive").textContent = "許可を求められませんでした：" + err.message; return; }
+      if (!window.DeviceMotionEvent) { $("motLive").textContent = "このブラウザは動きのセンサーに対応していません"; return; }
+      on = true; g = null; last = {}; pose = ""; poseCand = "";
+      window.addEventListener("devicemotion", onMotion);
+      liveTimer = setInterval(live, 200);
+      $("motGo").textContent = "⏹ 止める";
+    };
+    // 画面を移ったら止める（ほかの画面で振っても反応しないように）
+    document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { if (on && b.dataset.mode !== "input") $("motGo").click(); }));
+  }
 </script>
 </body>
 </html>
