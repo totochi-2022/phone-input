@@ -56,6 +56,8 @@
   #bmPad .row button { height: 40px; padding: 0 4px; }
   #bmPad .row { margin-top: 6px; }
   #bmPad .line { margin-top: 2px; }
+  /* 長押しで使うボタン：押し続けてもボタンの文字が選ばれない・メニューが出ないように */
+  #send, #voClaude { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   #bmPad #status { margin: 2px 0 0; font-size: 12px; }
   /* 上の端の帯：横になぞる（か押す）とマウス⇔キーボード */
   #bmSwitch { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 -12px; padding: 7px 0;
