@@ -52,6 +52,14 @@
   #bmPad .padwrap { height: 28vh; margin-top: 4px; }
   #bmPad .row { margin-top: 6px; }
   #bmPad .row button { padding: 11px 4px; }
+  /* 上の端の帯：横になぞる（か押す）とマウス⇔キーボード */
+  #bmSwitch { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 -12px; padding: 7px 0;
+              font-size: 13px; color: #888; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #bmSwitch b { padding: 2px 10px; border-radius: 10px; font-weight: normal; }
+  #bmSwitch b.on { background: #2a5bd7; color: #fff; }
+  #bmPad .pckb { display: none; margin-top: 4px !important; }
+  #bmPad.kb .pckb { display: grid; }
+  #bmPad.kb .padwrap, #bmPad.kb #mouseRow { display: none; }
   body.bm #inputView { display: none; }
   body.bm #bmView { display: flex; }
   #testView { display: none; }
@@ -185,6 +193,7 @@
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる</td></tr>
+<tr><td>🔖 の下</td><td>マウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
 <tr><td>F6 ロック</td><td>F6 を押さえたまま Shift＝F6 を押しっぱなし（動画の操作を続けて打てる）。もう一度 F6 か Shift で解除</td></tr>
 <tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
@@ -221,7 +230,7 @@
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write"></iframe></div>
-<div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe><div id="bmPad"></div></div>
+<div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe><div id="bmPad"><div id="bmSwitch">‹ <b id="bmSwM">🖱 マウス</b><b id="bmSwK">⌨ キーボード</b> ›</div></div></div>
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
   <button id="clSuggest" class="sug" hidden></button>
@@ -332,10 +341,35 @@
   // 同じ要素を動かすので、触ったときの処理はそのまま。入力の画面に戻ったら元の場所（パッドの印の後ろ）へ
   const padHome = document.createComment("pad");
   document.querySelector(".padwrap").before(padHome);
+  // PC キーボードも一緒に移し、上の端の帯（#bmSwitch）を横になぞるか押すとマウス⇔キーボードを切り替える
+  const kbHome = document.createComment("pckb");
+  $("pckb").before(kbHome);
   function movePad(toBm) {
-    const pw = document.querySelector(".padwrap"), row = $("mouseRow");
-    if (toBm) { $("bmPad").append(pw, row); }
-    else if (pw.parentNode === $("bmPad")) { padHome.after(pw, row); }
+    const pw = document.querySelector(".padwrap"), row = $("mouseRow"), kb = $("pckb");
+    if (toBm) { $("bmPad").append(pw, row, kb); bmSetKb(bmKb); }
+    else if (pw.parentNode === $("bmPad")) { padHome.after(pw, row); kbHome.after(kb); }
+  }
+  let bmKb = false;
+  try { bmKb = localStorage.getItem("bmKb") === "1"; } catch (e) {}
+  function bmSetKb(on) {
+    bmKb = on;
+    $("bmPad").classList.toggle("kb", on);
+    $("bmSwM").classList.toggle("on", !on);
+    $("bmSwK").classList.toggle("on", on);
+    try { localStorage.setItem("bmKb", on ? "1" : "0"); } catch (e) {}
+  }
+  {
+    let sx = null;
+    const sw = $("bmSwitch");
+    sw.addEventListener("pointerdown", (e) => { sx = e.clientX; sw.setPointerCapture(e.pointerId); });
+    sw.addEventListener("pointerup", (e) => {
+      if (sx === null) return;
+      const dx = e.clientX - sx; sx = null;
+      if (dx < -40) bmSetKb(true);        // 左へなぞる → キーボード（右から出てくる）
+      else if (dx > 40) bmSetKb(false);   // 右へなぞる → マウス
+      else if (Math.abs(dx) < 10) bmSetKb(!bmKb);  // 押しただけなら切り替え
+    });
+    sw.addEventListener("pointercancel", () => { sx = null; });
   }
 
   // モード切り替え：autotube（web.py、既定ポート 8766）の画面を iframe で全体に出す。合言葉は共通
