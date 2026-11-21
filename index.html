@@ -523,7 +523,7 @@
   {
     let t0 = 0, lt = null;
     const b = $("voClaude");
-    b.addEventListener("pointerdown", () => { t0 = Date.now(); if (!voRec) lt = setTimeout(() => b.classList.add("long"), 500); });
+    b.addEventListener("pointerdown", () => { t0 = Date.now(); if (!voRec) lt = setTimeout(() => { b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(60); }, 500); });
     const end = (go) => {
       clearTimeout(lt); b.classList.remove("long");
       if (!go || !t0) { t0 = 0; return; }
@@ -921,7 +921,7 @@
   {
     let t0 = 0, lt = null;
     const b = $("send");
-    b.addEventListener("pointerdown", () => { t0 = Date.now(); lt = setTimeout(() => b.classList.add("long"), 500); });
+    b.addEventListener("pointerdown", () => { t0 = Date.now(); lt = setTimeout(() => { b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(60); }, 500); });
     const end = (go) => { clearTimeout(lt); const long = Date.now() - t0 >= 500; b.classList.remove("long"); if (go && t0) sendText(long); t0 = 0; };
     b.addEventListener("pointerup", () => end(true));
     b.addEventListener("pointercancel", () => end(false));
