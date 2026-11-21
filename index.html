@@ -56,7 +56,6 @@
   #bmPad .row button { height: 40px; padding: 0 4px; }
   #bmPad .row { margin-top: 6px; }
   #bmPad .line { margin-top: 2px; }
-  #send.long, #voClaude.long { background: #d7802a; color: #fff; }  /* 長押し＝Enter 付きになったしるし */
   #bmPad #status { margin: 2px 0 0; font-size: 12px; }
   /* 上の端の帯：横になぞる（か押す）とマウス⇔キーボード */
   #bmSwitch { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 -12px; padding: 7px 0;
@@ -208,8 +207,8 @@
 <tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
 <tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
 <tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
-<tr><td>🤖 Claude に頼む</td><td>短く押す＝話して頼む（作業中なら順番待ち）、長押し（橙）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
-<tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（橙になる）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
+<tr><td>🤖 Claude に頼む</td><td>短く押す＝話して頼む（作業中なら順番待ち）、長押し（0.5 秒で震えてすぐ聞き始める）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
+<tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（0.5 秒で震えてすぐ送る）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
 </table>
 <h3>窓・タブ（F7・F8・かな）</h3>
 <table>
@@ -527,10 +526,9 @@
     b.addEventListener("pointerdown", () => {
       t0 = Date.now();
       if (!voRec) lt = setTimeout(() => {
-        t0 = 0; b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(80);
+        t0 = 0; if (navigator.vibrate) navigator.vibrate(80);
         $("voCut").checked = true; voListen(b, askClaude);
         $("voText").textContent = "聞いています…（割り込みで送ります）";
-        setTimeout(() => b.classList.remove("long"), 400);
       }, 500);
     });
     const end = (go) => {
@@ -932,8 +930,7 @@
     // 0.5 秒押し続けたら、離すのを待たずにその場で（震えて）Enter 付きで送る
     b.addEventListener("pointerdown", () => {
       t0 = Date.now();
-      lt = setTimeout(() => { t0 = 0; b.classList.add("long"); if (navigator.vibrate) navigator.vibrate(80); sendText(true);
-                              setTimeout(() => b.classList.remove("long"), 400); }, 500);
+      lt = setTimeout(() => { t0 = 0; if (navigator.vibrate) navigator.vibrate(80); sendText(true); }, 500);
     });
     const end = (go) => { clearTimeout(lt); if (go && t0) sendText(false); t0 = 0; };
     b.addEventListener("pointerup", () => end(true));
