@@ -45,10 +45,15 @@
   #atView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
   #atView iframe { width: 100%; height: 100%; border: 0; background: #111; }
   body.at #inputView { display: none; }
-  #bmView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
-  #bmView iframe { width: 100%; height: 100%; border: 0; background: #111; }
+  #bmView { position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-direction: column; }
+  #bmView iframe { width: 100%; flex: 1; min-height: 0; border: 0; background: #111; }
+  /* ブックマークの画面の下にマウスのパッドと 3 つのボタン（入力の画面のものをそのまま移して使う） */
+  #bmPad { flex: none; padding: 4px 12px 10px; background: #111; border-top: 1px solid #333; }
+  #bmPad .padwrap { height: 28vh; margin-top: 4px; }
+  #bmPad .row { margin-top: 6px; }
+  #bmPad .row button { padding: 11px 4px; }
   body.bm #inputView { display: none; }
-  body.bm #bmView { display: block; }
+  body.bm #bmView { display: flex; }
   #testView { display: none; }
   body.test #inputView { display: none; }
   /* Claude のページ：上の操作は固定、下の会話だけスクロール（top はモードの段の高さを JS で入れる） */
@@ -216,7 +221,7 @@
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write"></iframe></div>
-<div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe></div>
+<div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe><div id="bmPad"></div></div>
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
   <button id="clSuggest" class="sug" hidden></button>
@@ -254,7 +259,7 @@
   <div id="pad"></div>
   <div id="wheel"><span>▲</span><span>押している間<br>スクロール</span><span>▼</span></div>
 </div>
-<div class="row">
+<div class="row" id="mouseRow">
   <button id="lclick" class="mbtn">左クリック</button>
   <button id="dclick">ダブル</button>
   <button id="rclick" class="mbtn">右クリック</button>
@@ -323,12 +328,23 @@
   window.addEventListener("resize", fitViews);
   if (window.ResizeObserver) new ResizeObserver(fitViews).observe($("modebar"));
 
+  // マウスのパッド（右のスクロールの帯つき）と左クリック・ダブル・右クリックを、ブックマークの画面では下に移す。
+  // 同じ要素を動かすので、触ったときの処理はそのまま。入力の画面に戻ったら元の場所（パッドの印の後ろ）へ
+  const padHome = document.createComment("pad");
+  document.querySelector(".padwrap").before(padHome);
+  function movePad(toBm) {
+    const pw = document.querySelector(".padwrap"), row = $("mouseRow");
+    if (toBm) { $("bmPad").append(pw, row); }
+    else if (pw.parentNode === $("bmPad")) { padHome.after(pw, row); }
+  }
+
   // モード切り替え：autotube（web.py、既定ポート 8766）の画面を iframe で全体に出す。合言葉は共通
   const AUTOTUBE_PORT = location.protocol === "https:" ? 8776 : 8766;  // HTTPS のページの中に http のページは出せない
   function setMode(mode) {
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
+    movePad(mode === "bm");
     if (mode === "test") { fitViews(); chatSig = ""; setTimeout(chatRefresh, 0); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {
