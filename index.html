@@ -214,7 +214,7 @@
 <tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
 <tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
 <tr><td>🤖 Claude に頼む</td><td>1 回目に押す＝聞き始める。話し終わって 2 回目：短く押す＝割り込まずに頼む、長押し（0.5 秒で震えてすぐ終わる）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
-<tr><td>振る</td><td>はたく（手前・奥へ倒す）＝🤖 Claude に頼むへ、左右に振る＝▶ autotube へ、立てたまま 2 回回す（1.5 秒以内）＝🎮 操作へ（⚙ でオンオフ）</td></tr>
+<tr><td>振る</td><td>はたく（手前・奥へ倒す）＝🤖 Claude に頼むへ、左右に振る＝▶ autotube へ、立てたまま 2 回回す（1.5 秒以内）＝🎮 操作へ（⚙ でオンオフ。移ると震える：Claude＝長く 1 回、操作＝短く 2 回、autotube＝短く 3 回）</td></tr>
 <tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（0.5 秒で震えてすぐ送る）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
 </table>
 <h3>窓・タブ（F7・F8・かな）</h3>
@@ -1318,6 +1318,10 @@
     try { TH = +(localStorage.getItem("shakeTh") || 14); } catch (e) {}
     $("shakeTh").value = TH; $("shakeThV").textContent = TH;
     $("shakeTh").oninput = () => { TH = +$("shakeTh").value; $("shakeThV").textContent = TH; try { localStorage.setItem("shakeTh", TH); } catch (e) {} };
+    // 移ったら震わせる：Claude＝長く 1 回、操作＝短く 2 回、autotube＝短く 3 回
+    // （Chrome は一度も画面に触れていないページでは震わせないので、断られたら記録に残す）
+    let buzzNote = "";
+    const buzz = (pat) => { let ok = false; try { ok = navigator.vibrate ? navigator.vibrate(pat) : false; } catch (e) {} buzzNote = ok ? "" : "（震わせられなかった）"; };
     let g = null, peaks = { x: [], y: [] }, cool = 0, spin = false, spins = [];
     window.addEventListener("devicemotion", (e) => {
       if (!$("shakeNav").checked || window.motTesting || document.hidden) return;
@@ -1331,8 +1335,8 @@
       // はたく（手前・奥へ倒す。Android の Chrome では α）を 1 回 → 🤖 Claude に頼む
       if (!spin && ra > TH * 25 && ra > rb && ra > rg) {
         spin = true; spins = []; peaks = { x: [], y: [] }; cool = now + 1200;
-        if (navigator.vibrate) navigator.vibrate(60);
-        clog("motion", "振って移る：はたく → 🤖 Claude に頼む");
+        buzz([250]);
+        clog("motion", "振って移る：はたく → 🤖 Claude に頼む" + buzzNote);
         setMode("test");
         return;
       }
@@ -1341,8 +1345,8 @@
         while (spins.length && now - spins[0] > 1500) spins.shift();
         if (spins.length >= 2) {
           spins = []; peaks = { x: [], y: [] }; cool = now + 1200;
-          if (navigator.vibrate) navigator.vibrate(60);
-          clog("motion", "振って移る：2 回回す → 🎮 操作");
+          buzz([90, 90, 90]);
+          clog("motion", "振って移る：2 回回す → 🎮 操作" + buzzNote);
           setMode("bm");
           return;
         }
@@ -1357,8 +1361,8 @@
         if (pk.length >= 3) {
           peaks = { x: [], y: [] }; cool = now + 1200;
           const mode = k === "x" ? "at" : "test";
-          if (navigator.vibrate) navigator.vibrate(60);
-          clog("motion", "振って移る：" + (k === "x" ? "左右 → ▶ autotube" : "上下 → 🤖 Claude に頼む"));
+          buzz([90, 90, 90, 90, 90]);
+          clog("motion", "振って移る：" + (k === "x" ? "左右 → ▶ autotube" : "上下 → 🤖 Claude に頼む") + buzzNote);
           setMode(mode);
           return;
         }
