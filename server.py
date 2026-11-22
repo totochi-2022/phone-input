@@ -460,6 +460,8 @@ def lan_url():
             ip = s.getsockname()[0]
     except OSError:
         ip = "127.0.0.1"
+    if (TLS_DIR / "cert.pem").exists():  # HTTPS が開いていればそちら（マイク・アプリとして入れるのに要る）
+        return f"https://{ip}:{HTTPS_PORT}/?t={TOKEN}"
     return f"http://{ip}:{PORT}/?t={TOKEN}"
 
 
