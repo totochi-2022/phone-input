@@ -249,8 +249,8 @@
 </table>
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
-<div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write"></iframe></div>
-<div id="bmView"><iframe id="bmFrame" title="ブックマーク"></iframe><div id="bmPad"><div id="bmSwitch"><button class="jmp" data-jump="term">端末</button><span class="sw">‹ <b id="bmSwM">🖱 マウス</b><b id="bmSwK">⌨ キーボード</b> ›</span><button class="jmp" data-jump="video">動画</button></div></div></div>
+<div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write; accelerometer; gyroscope"></iframe></div>
+<div id="bmView"><iframe id="bmFrame" title="ブックマーク" allow="accelerometer; gyroscope"></iframe><div id="bmPad"><div id="bmSwitch"><button class="jmp" data-jump="term">端末</button><span class="sw">‹ <b id="bmSwM">🖱 マウス</b><b id="bmSwK">⌨ キーボード</b> ›</span><button class="jmp" data-jump="video">動画</button></div></div></div>
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
   <button id="clSuggest" class="sug" hidden></button>
@@ -1346,7 +1346,7 @@
     const buzz = (pat) => { let ok = false; try { ok = navigator.vibrate ? navigator.vibrate(pat) : false; } catch (e) {} buzzNote = ok ? "" : "（震わせられなかった）"; };
     let g = null, peaks = { x: [], y: [] }, cool = 0, spin = false, spins = [], rotT = 0, lastTouch = 0;
     for (const ev of ["pointerdown", "pointerup"]) document.addEventListener(ev, () => { lastTouch = performance.now(); }, true);
-    window.addEventListener("devicemotion", (e) => {
+    const shakeOnMotion = (e) => {
       if (!$("shakeNav").checked || window.motTesting || document.hidden) return;
       const ig = e.accelerationIncludingGravity || {}, now = e.timeStamp || performance.now();
       if (ig.x == null) return;
@@ -1422,6 +1422,14 @@
           return;
         }
       }
+    };
+    window.addEventListener("devicemotion", shakeOnMotion);
+    // autotube・ブックマークの枠（別のポート＝別サイト）に触ると、Chrome は傾きの知らせを触った枠にしか渡さない。
+    // 枠の中のページが受けた値を postMessage で送ってくるので、同じ処理に通す
+    window.addEventListener("message", (m) => {
+      const d = m.data && m.data.pimotion;
+      if (!d || ![$("atFrame").src, $("bmFrame").src].some((u) => { try { return new URL(u).origin === m.origin; } catch (e) { return false; } })) return;
+      shakeOnMotion({ accelerationIncludingGravity: d.ig, acceleration: d.a, rotationRate: d.r });
     });
   }
 </script>
