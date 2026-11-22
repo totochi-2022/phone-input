@@ -208,7 +208,7 @@
 <button id="helpClose">✕ 閉じる</button>
 <h3>この画面（リモコン）</h3>
 <table>
-<tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える</td></tr>
+<tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える。動く量は ⚙ 設定の「🖱 マウスのパッド」で</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
 <tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る。帯の両端の「端末」「動画」でテレビをそこへ（F7＋T／F7＋M と同じ）</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
@@ -295,6 +295,10 @@
   <label><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む</label>
   <div>読む場所：<label><input type="radio" name="voOut" value="phone"> スマホ</label>　<label><input type="radio" name="voOut" value="tv"> テレビ</label></div>
   <label><input type="checkbox" id="voJump"> 頼んだらテレビを端末へ切り替える</label>
+</div>
+<h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">🖱 マウスのパッド</h3>
+<div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
+  <label style="font-size:14px">動く量 <span style="color:#888;font-size:12px">少ない</span> <input type="range" id="padSpeed" min="0.4" max="3" step="0.1" value="1" style="width:130px;vertical-align:middle"> <span style="color:#888;font-size:12px">多い</span>　<span id="padSpeedV">1.0</span> 倍</label>
 </div>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">📳 振って画面を移る</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
@@ -983,7 +987,15 @@
 
   // タッチパッド：動きとボタン操作をためて 40ms ごとにまとめて送る（送信中は次を待つ）。
   // 移動とボタンを同じ道で送るので順番が入れ替わらない（サーバーは移動 → ボタンの順に実行）
-  const SPEED = 2.4, SCROLL_MAX = 6;  // SCROLL_MAX = 40ms ごとの最大スクロール量
+  const SPEED0 = 2.4, SCROLL_MAX = 6;  // SCROLL_MAX = 40ms ごとの最大スクロール量
+  // パッドの動く量：⚙ 設定のつまみ（0.4〜3 倍、最初は 1 倍）。スマホに覚える
+  let padMul = 1;
+  try { padMul = +(localStorage.getItem("padSpeed") || 1) || 1; } catch (e) {}
+  $("padSpeed").value = padMul; $("padSpeedV").textContent = padMul.toFixed(1);
+  $("padSpeed").oninput = () => {
+    padMul = +$("padSpeed").value; $("padSpeedV").textContent = padMul.toFixed(1);
+    try { localStorage.setItem("padSpeed", padMul); } catch (e) {}
+  };
   let acc = { x: 0, y: 0, s: 0 }, ops = [], busy = false;
   async function flush() {
     if (busy) return;
@@ -1025,7 +1037,7 @@
     el.addEventListener("pointercancel", () => { last = start = null; });
   }
   track($("pad"), (dx, dy) => {
-    const f = SPEED * (1 + Math.min(Math.hypot(dx, dy) / 12, 2));  // 速く動かすほど大きく動く
+    const f = SPEED0 * padMul * (1 + Math.min(Math.hypot(dx, dy) / 12, 2));  // 速く動かすほど大きく動く
     acc.x += dx * f; acc.y += dy * f;
   }, () => click("left"));
   // パッドの端に指が来たら震える（見ずになぞっていても境が分かるように）。内側へ 55px 戻ると次も震える
