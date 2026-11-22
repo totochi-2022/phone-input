@@ -462,6 +462,7 @@
   const SILENCE_MS = 4000;
   // 言葉で記号：「はてな」「クエスチョン（マーク）」「疑問符」→ ？（文の終わりか区切りの前のとき）。言い忘れたら Claude が文の形で判断する
   const punct = (t) => t.replace(/[\s、]*(はてな|ハテナ|クエスチョンマーク|クエスチョン|疑問符)(?=$|[\s。、！？!?])/g, "？").replace(/？[。、]/g, "？");
+  const merge = (a, t) => !t || a.endsWith(t) ? a : (a && t.startsWith(a) ? t : a + t);
   function listenLong({ onText, onDone, onError }) {
     let final = "", done = false, rec = null, timer = null;
     const arm = (ms) => { clearTimeout(timer); timer = setTimeout(() => { done = true; if (rec) rec.stop(); }, ms); };
@@ -471,15 +472,17 @@
       let sess = "";
       r.onresult = (e) => {
         arm(SILENCE_MS);
+        // 機種・版によっては（Android 10 の Chrome 155 で見た）同じ文や「それまで全部」が結果に何度も重なって来るので、
+        // 前と同じなら捨て、前の続きを含むなら置き換える（2026-11-23。「降っても動かないって」が 15 回並んだ）
         let interim = ""; sess = "";
         for (let i = 0; i < e.results.length; i++) {
-          if (e.results[i].isFinal) sess += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
+          if (e.results[i].isFinal) sess = merge(sess, e.results[i][0].transcript); else interim = merge(interim, e.results[i][0].transcript);
         }
-        onText(punct(final + sess + interim));
+        onText(punct(merge(final, merge(sess, interim))));
       };
       r.onerror = (e) => { if (e.error !== "no-speech" && e.error !== "aborted") { done = true; onError(e.error); } };
       r.onend = () => {
-        final += sess;
+        final = merge(final, sess);
         if (done) { clearTimeout(timer); onDone(punct(final).trim()); return; }
         try { startOne(); } catch (err) { done = true; onDone(punct(final).trim()); }
       };
