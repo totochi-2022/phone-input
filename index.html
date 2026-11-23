@@ -462,7 +462,8 @@
   const SILENCE_MS = 4000;
   // 言葉で記号：「はてな」「クエスチョン（マーク）」「疑問符」→ ？（文の終わりか区切りの前のとき）。言い忘れたら Claude が文の形で判断する
   const punct = (t) => t.replace(/[\s、]*(はてな|ハテナ|クエスチョンマーク|クエスチョン|疑問符)(?=$|[\s。、！？!?])/g, "？").replace(/？[。、]/g, "？");
-  const merge = (a, t) => !t || a.endsWith(t) ? a : (a && t.startsWith(a) ? t : a + t);
+  // 重なって来るのは「最初から今まで」の文なので、前の頭と同じ（短い頭からやり直した）・前の終わりと同じなら捨て、前を含めば置き換える
+  const merge = (a, t) => !t || a.endsWith(t) || a.startsWith(t) ? a : (a && t.startsWith(a) ? t : a + t);
   function listenLong({ onText, onDone, onError }) {
     let final = "", done = false, rec = null, timer = null;
     const arm = (ms) => { clearTimeout(timer); timer = setTimeout(() => { done = true; if (rec) rec.stop(); }, ms); };
