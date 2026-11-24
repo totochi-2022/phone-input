@@ -765,7 +765,7 @@ def claude_prompt():
             last = i
     # 選択肢は 1 から連番で、選んでいる印（❯）が 1 つあるときだけ確認とみなす（会話の中の番号付きの箇条書きと区別）
     if len(opts) < 2 or [o["n"] for o in opts] != list(range(1, len(opts) + 1)) or sum(o["sel"] for o in opts) != 1:
-        return claude_menu(lines)
+        return claude_menu(lines) or claude_esc_only(lines)
     # 確認の枠：選択肢より上で最後の実線（───）から。上から 見出し → 説明 → 点線（╌）にはさまれた中身 → 注記 → 質問
     top = next((i for i in range(first - 1, -1, -1) if lines[i].strip() and set(lines[i].strip()) <= set("─━")), None)
     region = lines[top + 1:first] if top is not None else lines[max(0, first - 14):first]
@@ -795,6 +795,18 @@ def claude_prompt():
         desc += code; code = []
     return {"screen": screen, "title": title, "desc": desc, "code": "\n".join(code), "note": note, "question": question,
             "options": [{"n": o["n"], "label": o["label"]} for o in opts]}
+
+
+def claude_esc_only(lines):
+    """選択肢の無い案内の画面（/fast の「Fast mode … Esc to cancel」など）。Esc で閉じるだけの枠として出す
+    （出たままだとリモコンは「確認が出ている」と送れず、答えるボタンも無くて止まっていた）"""
+    tail = [ln for ln in lines[-20:] if ln.strip()]
+    if not tail or not re.search(r"Esc to (cancel|close|exit|go back)", tail[-1] if len(tail) < 2 else " ".join(tail[-2:])):
+        return None
+    top = max((i for i, ln in enumerate(lines) if ln.strip() and set(ln.strip()) <= set("▔─━")), default=len(lines) - 12)
+    region = [ln.strip() for ln in lines[top + 1:] if ln.strip()]
+    return {"screen": "\n".join(region), "title": region[0] if region else "", "desc": region[1:], "code": "", "note": [],
+            "question": "", "options": []}
 
 
 def claude_menu(lines):
