@@ -710,8 +710,10 @@ def claude_pane():
     if not sock:
         return ""
     try:
-        panes = subprocess.run(["tmux", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"], capture_output=True,
+        # 動きの新しい窓から（同じソケットに 2 つの窓がつないでいると、古い窓に前の画面が残ったままになる。SSH から開き直したときなど）
+        panes = subprocess.run(["tmux", "list-panes", "-a", "-F", "#{window_activity} #{pane_id} #{pane_pid}"], capture_output=True,
                                text=True, timeout=3).stdout.split("\n")
+        panes = [ln.split(" ", 1)[1] for ln in sorted((ln for ln in panes if ln.count(" ") >= 2), key=lambda ln: -int(ln.split(" ")[0] or 0))]
     except (OSError, subprocess.TimeoutExpired):
         return ""
     children = {}  # 親の pid → 子の pid（/proc から）
