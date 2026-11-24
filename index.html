@@ -42,9 +42,13 @@
              margin: -12px -12px 10px; padding: 8px 12px; background: #111; border-bottom: 1px solid #333; }
   .modebar button { padding: 9px 4px; font-size: 15px; }
   .modebar button.on { background: #2a5bd7; font-weight: bold; }
-  #atView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
+  #atView, #deskView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
+  #deskView iframe { width: 100%; height: 100%; border: 0; background: #111; }
+  body.desk #deskView { display: block; }
+  .modebar [data-mode="desk"] { flex: 0 0 auto; padding: 9px 8px; }
   #atView iframe { width: 100%; height: 100%; border: 0; background: #111; }
   body.at #inputView { display: none; }
+  body.desk #inputView { display: none; }
   #bmView { position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-direction: column; }
   #bmView iframe { width: 100%; flex: 1; min-height: 0; border: 0; background: #111; }
   /* ブックマークの画面の下にマウスのパッドと 3 つのボタン（入力の画面のものをそのまま移して使う） */
@@ -202,6 +206,7 @@
   <button data-mode="bm" title="テレビの操作：ブックマーク・タブ・動画（autotube の /bookmarks）・文字・マウス・キーボード">🎮 操作</button>
   <button data-mode="at">▶ autotube</button>
   <button data-mode="test" title="Claude：音声で常駐の Claude に頼む・返事を見る・読む">🤖 Claude に頼む</button>
+  <button data-mode="desk" title="claude-desk（Claude の作業台。確認・メニューにも答えられる。試しに並べている）">🧰</button>
   <button data-mode="input" title="設定・使い方・QR コード">⚙</button>
 </div>
 <div id="help">
@@ -264,6 +269,7 @@
 </table>
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
+<div id="deskView"><iframe id="deskFrame" title="claude-desk" allow="microphone; clipboard-read; clipboard-write"></iframe></div>
 <div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write; accelerometer; gyroscope"></iframe></div>
 <div id="bmView"><iframe id="bmFrame" title="ブックマーク" allow="accelerometer; gyroscope"></iframe><div id="bmPad"><div id="bmSwitch"><button class="jmp" data-jump="term">端末</button><span class="sw">‹ <b id="bmSwM">🖱 マウス</b><b id="bmSwK">⌨ キーボード</b> ›</span><button class="jmp" data-jump="video">動画</button></div></div></div>
 <div id="testView">
@@ -347,7 +353,7 @@
   }, true);
   function clog(kind, msg) {
     try {
-      const mode = ["at", "bm", "test"].find((m) => document.body.classList.contains(m)) || "input";
+      const mode = ["at", "bm", "test", "desk"].find((m) => document.body.classList.contains(m)) || "input";
       fetch("/clientlog", { method: "POST", headers: { "Content-Type": "application/json", "X-Token": token },
         body: JSON.stringify({ kind, msg: String(msg).slice(0, 2000), mode, last: lastAction }) }).catch(() => {});
     } catch (e) {}
@@ -379,7 +385,7 @@
   // 開いた直後（絵文字・文字の読み込み中）・全画面・画面の回転・上の段の高さが変わったときに合わせ直す
   function fitViews() {
     const top = Math.max(0, Math.round($("modebar").getBoundingClientRect().bottom)) + "px";
-    for (const v of ["atView", "bmView", "testView"]) $(v).style.top = top;
+    for (const v of ["atView", "bmView", "testView", "deskView"]) $(v).style.top = top;
   }
   document.addEventListener("fullscreenchange", fitViews);
   window.addEventListener("resize", fitViews);
@@ -433,6 +439,12 @@
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
+    document.body.classList.toggle("desk", mode === "desk");
+    if (mode === "desk") {  // claude-desk（別のサーバー）を iframe で。URL と合言葉は phone-input の /desk から
+      fitViews();
+      if (!$("deskFrame").src) fetch(`/desk?t=${encodeURIComponent(token)}`).then((r) => r.ok ? r.json() : Promise.reject(r.status))
+        .then((d) => { $("deskFrame").src = d.url; }).catch((e) => { $("deskFrame").srcdoc = `<p style="color:#ccc">claude-desk が開けません（${e}）</p>`; });
+    }
     if (mode === "test") { fitViews(); chatSig = ""; setTimeout(chatRefresh, 0); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     if (mode === "at") {

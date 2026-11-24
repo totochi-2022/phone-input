@@ -1045,10 +1045,19 @@ class Handler(BaseHTTPRequestHandler):
                 "share_target": {"action": "/share", "method": "GET",
                                  "params": {"title": "title", "text": "text", "url": "url"}},
             }, ensure_ascii=False).encode(), "application/manifest+json")
-        if path not in ("/", "/info"):
+        if path not in ("/", "/info", "/desk"):
             return self._reply(404, b"not found")
         if not self._authed():
             return self._reply(403, "トークンが違います".encode())
+        if path == "/desk":  # claude-desk（Claude の作業台、別のサーバー）の URL。合言葉は claude-desk の設定から
+            try:
+                st = json.loads((Path.home() / ".config/claude-desk/settings.json").read_text())
+            except (OSError, ValueError):
+                return self._reply(404, "claude-desk の設定がありません".encode())
+            https = isinstance(self.connection, __import__("ssl").SSLSocket)
+            host = (self.headers.get("Host") or "127.0.0.1").rsplit(":", 1)[0]
+            url = f"{'https' if https else 'http'}://{host}:{8771 if https else 8770}/?t={st.get('lan_token', '')}"
+            return self._reply(200, json.dumps({"url": url}).encode(), "application/json")
         if path == "/info":  # QR コード用
             return self._reply(200, json.dumps({"url": lan_url()}).encode(), "application/json")
         self._reply(200, PAGE, "text/html; charset=utf-8")
