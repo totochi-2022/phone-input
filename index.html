@@ -23,6 +23,7 @@
   .grid small { display: block; font-size: 11px; color: #aaa; }
   .padwrap { display: flex; gap: 8px; margin-top: 8px; height: 34vh; }
   #pad { flex: 1; background: #1c1f26; border: 1px solid #446; border-radius: 10px; touch-action: none; position: relative;
+         user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
          background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 52px, transparent 54px); }
   #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 52px, transparent 54px); }
   #pad.gdraw { border-color: #8ab4ff; }
@@ -1126,7 +1127,7 @@
     let el = $("gestMsg");
     if (!el) { el = document.createElement("div"); el.id = "gestMsg"; pad.append(el); }
     el.textContent = text; el.className = ok ? "ok" : "ng"; el.style.opacity = 1;
-    clearTimeout(gestFlash.t); gestFlash.t = setTimeout(() => { el.style.opacity = 0; }, ms);
+    clearTimeout(gestFlash.t); gestFlash.t = setTimeout(() => { el.style.opacity = 0; setTimeout(() => { if (el.style.opacity === "0") el.textContent = ""; }, 500); }, ms);
   }
   function gestFinish() {
     const g = gest; gest = null; pad.classList.remove("gdraw");
@@ -1202,6 +1203,7 @@
       mouse = null;
     }
   };
+  pad.addEventListener("contextmenu", (e) => e.preventDefault());  // 長押しで文字選び・メニューを出さない
   pad.addEventListener("pointerup", (e) => padUp(e, true));
   pad.addEventListener("pointercancel", (e) => padUp(e, false));
   // パッドの端に指が来たら震える（見ずになぞっていても境が分かるように）。内側へ 55px 戻ると次も震える。角の指・ジェスチャーの指は除く
