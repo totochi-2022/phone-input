@@ -24,12 +24,12 @@
   .padwrap { display: flex; gap: 8px; margin-top: 8px; height: 34vh; }
   #pad { flex: 1; background: #1c1f26; border: 1px solid #446; border-radius: 10px; touch-action: none; position: relative;
          user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-         background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 52px, transparent 54px),
-                           radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 52px, transparent 54px); }
-  #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 52px, transparent 54px),
-                           radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 52px, transparent 54px); }
-  #pad.gcreg { background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 52px, transparent 54px),
-                           radial-gradient(circle at 0 100%, #c08030 0, #c08030 52px, transparent 54px); }
+         background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px),
+                           radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 92px, transparent 94px); }
+  #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 92px, transparent 94px),
+                           radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 92px, transparent 94px); }
+  #pad.gcreg { background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px),
+                           radial-gradient(circle at 0 100%, #c08030 0, #c08030 92px, transparent 94px); }
   #pad.gdraw { border-color: #8ab4ff; }
   #gestMsg { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font-size: 17px; pointer-events: none; white-space: pre-line;
              background: rgba(0,0,0,.6); padding: 6px; border-radius: 8px;
@@ -1190,7 +1190,8 @@
     g.lineTo(e[0] - Math.cos(ang + 0.5) * L, e[1] - Math.sin(ang + 0.5) * L); g.fill();
   }
   function gcvFade(ms) { const c = gcvGet(); clearTimeout(gcvFade.t); gcvFade.t = setTimeout(() => { c.style.opacity = 0; }, ms); }
-  const pad = $("pad"), CORNER = 70, SEG = 28;
+  const pad = $("pad"), SEG = 28;
+  let CORNER = 110;  // 角の押さえる範囲（パッドが低いときは上下が重ならないよう半分まで）
   let anchor = null, mouse = null, gest = null;
   const padLocal = (e) => { const r = pad.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const padSkip = (e) => (anchor && e.pointerId === anchor.id) || (gest && e.pointerId === gest.id);
@@ -1352,6 +1353,7 @@
       return;
     }
     const ph = pad.getBoundingClientRect().height;
+    CORNER = Math.min(110, ph / 2 - 4);
     if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && (y < CORNER || y > ph - CORNER)) {
       const reg = y > ph - CORNER;  // 左上＝見分ける、左下＝番号を付けて登録する（実験）
       if (!reg) regAbort();
@@ -1376,7 +1378,7 @@
     if (anchor && e.pointerId === anchor.id) {
       if (anchor.used || mouse) return;
       const [x, y] = padLocal(e);
-      if (Math.hypot(x - anchor.x, y - anchor.y) > 15) {  // 角から動かした → 普通のマウスの指
+      if (Math.hypot(x - anchor.x, y - anchor.y) > 30) {  // 角から動かした → 普通のマウスの指
         mouse = { id: anchor.id, last: [e.clientX, e.clientY], t: anchor.t, moved: 99 };
         anchor = null; pad.classList.remove("gcorner", "gcreg");
       }
