@@ -1106,15 +1106,52 @@
   }
   const gtLoad = () => { try { return JSON.parse(localStorage.getItem("gestTpl") || "[]"); } catch (e) { return []; } };
   const gtStore = (v) => { try { localStorage.setItem("gestTpl", JSON.stringify(v)); } catch (e) {} };
-  function gtMatch(pts) {  // いちばん近いお手本 { act, d }（無ければ null）
+  // 少しの傾き（±20°）と縦横の伸び縮み（0.7〜1.4 倍）を試して、いちばん合うところで比べる（向き・形の区別は残す）
+  const GT_ROT = [-20, -10, 0, 10, 20].map((d) => d * Math.PI / 180), GT_ASP = [0.7, 0.84, 1, 1.19, 1.4];
+  function gtVariants(n) {
+    const out = [];
+    for (const r of GT_ROT) for (const a of GT_ASP) {
+      const c = Math.cos(r), si = Math.sin(r), sx = Math.sqrt(a), sy = 1 / sx;
+      let v = n.map(([x, y]) => [(x * c - y * si) * sx, (x * si + y * c) * sy]);
+      const xs = v.map((q) => q[0]), ys = v.map((q) => q[1]);
+      const sz = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) || 1;
+      out.push(v.map(([x, y]) => [x / sz, y / sz]));
+    }
+    return out;
+  }
+  const gtPct = (d) => Math.max(0, Math.round(100 * (1 - d / (GT_OK * 2))));  // ずれ 0 ＝ 100%、採用の境目 ＝ 50%
+  function gtMatch(pts) {  // いちばん近いお手本 { act, d, tpl }（無ければ null）
     const n = gtNorm(pts); if (!n) return null;
+    const vs = gtVariants(n);
     let best = null;
-    for (const t of gtLoad()) for (const s of t.samples) {
-      let d = 0; for (let i = 0; i < GT_N; i++) d += Math.hypot(n[i][0] - s[i][0], n[i][1] - s[i][1]);
-      d /= GT_N; if (!best || d < best.d) best = { act: t.act, name: t.name, d };
+    for (const t of gtLoad()) for (const s of t.samples) for (const v of vs) {
+      let d = 0; for (let i = 0; i < GT_N; i++) d += Math.hypot(v[i][0] - s[i][0], v[i][1] - s[i][1]);
+      d /= GT_N; if (!best || d < best.d) best = { act: t.act, d, tpl: s };
     }
     return best;
   }
+  // パッドの上の線：なぞっている線（青）と、見分けたらお手本（緑）を重ねる
+  let gcv = null;
+  function gcvGet() {
+    if (!gcv) { gcv = document.createElement("canvas"); gcv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transition:opacity .5s"; $("pad").append(gcv); }
+    return gcv;
+  }
+  function gcvDraw(pts, tpl) {
+    const c = gcvGet(), r = $("pad").getBoundingClientRect();
+    if (c.width !== Math.round(r.width)) { c.width = r.width; c.height = r.height; }
+    const g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); c.style.opacity = 1;
+    g.lineCap = g.lineJoin = "round";
+    if (tpl && pts.length) {  // お手本を描いた線の真ん中・大きさに合わせて
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+      const sz = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+      const cx = xs.reduce((a, b) => a + b) / xs.length, cy = ys.reduce((a, b) => a + b) / ys.length;
+      g.strokeStyle = "rgba(120,240,140,.8)"; g.lineWidth = 8; g.beginPath();
+      tpl.forEach((q, j) => (j ? g.lineTo(cx + q[0] * sz, cy + q[1] * sz) : g.moveTo(cx + q[0] * sz, cy + q[1] * sz))); g.stroke();
+    }
+    g.strokeStyle = "#8ab4ff"; g.lineWidth = 4; g.beginPath();
+    pts.forEach((q, j) => (j ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.stroke();
+  }
+  function gcvFade(ms) { const c = gcvGet(); clearTimeout(gcvFade.t); gcvFade.t = setTimeout(() => { c.style.opacity = 0; }, ms); }
   const pad = $("pad"), CORNER = 70, SEG = 28;
   let anchor = null, mouse = null, gest = null;
   const padLocal = (e) => { const r = pad.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
@@ -1131,14 +1168,15 @@
   }
   function gestFinish() {
     const g = gest; gest = null; pad.classList.remove("gdraw");
-    if (!g || g.len < 40) { gestFlash("短すぎ", false); return; }
+    if (!g || g.len < 40) { gestFlash("短すぎ", false); gcvFade(300); return; }
     const key = g.dirs.join(""), m = gtMatch(g.pts);
     let act = null, shown = key;
-    if (m && m.d < GT_OK) { act = m.act; shown = "✍"; }  // 覚えた形が先
+    if (m && m.d < GT_OK) { act = m.act; shown = `✍ ${gtPct(m.d)}%`; }  // 覚えた形が先
     else if (GESTURES[key]) act = GESTURES[key];
     const hit = act && ACTIONS[act];
+    gcvDraw(g.pts, m && m.d < GT_OK * 1.6 ? m.tpl : null); gcvFade(gestTest ? 4000 : 1200);
     if (gestTest) {  // 試すだけ：見分けた中身を出して、送らない
-      const near = m ? `覚えた形で一番近い：${(ACTIONS[m.act] || [, , m.act])[2]}（ずれ ${m.d.toFixed(2)}、${GT_OK} 未満で採用）` : "覚えた形：なし";
+      const near = m ? `一番近い形：${(ACTIONS[m.act] || [, , m.act])[2]} ${gtPct(m.d)}%（50% 以上で採用）` : "覚えた形：なし";
       gestFlash(`向き ${key || "（なし）"}\n${near}\n→ ${hit ? hit[2] : "割り当てなし"}`, !!hit, 4000);
       if (navigator.vibrate) navigator.vibrate(hit ? 60 : [40, 60, 40]);
       return;
@@ -1167,7 +1205,7 @@
   pad.addEventListener("pointermove", (e) => {
     if (gest && e.pointerId === gest.id) {
       const [x, y] = padLocal(e);
-      gest.len += Math.hypot(x - gest.last[0], y - gest.last[1]); gest.last = [x, y]; gest.pts.push([x, y]);
+      gest.len += Math.hypot(x - gest.last[0], y - gest.last[1]); gest.last = [x, y]; gest.pts.push([x, y]); gcvDraw(gest.pts);
       const dx = x - gest.seg[0], dy = y - gest.seg[1];
       if (Math.hypot(dx, dy) >= SEG) {  // 区切りごとに上下左右のどれかに直す。同じ向きが続いたらまとめる
         const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "→" : "←") : (dy > 0 ? "↓" : "↑");
@@ -1192,7 +1230,7 @@
     acc.x += dx * f; acc.y += dy * f;
   });
   const padUp = (e, ok) => {
-    if (gest && e.pointerId === gest.id) { if (ok) gestFinish(); else { gest = null; pad.classList.remove("gdraw"); } return; }
+    if (gest && e.pointerId === gest.id) { if (ok) gestFinish(); else { gest = null; pad.classList.remove("gdraw"); gcvFade(0); } return; }
     if (anchor && e.pointerId === anchor.id) {
       if (ok && !anchor.used && Date.now() - anchor.t < 300) click("left");
       anchor = null; pad.classList.remove("gcorner");
