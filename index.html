@@ -1387,17 +1387,23 @@
     let text = "";
     try { text = await navigator.clipboard.readText(); }
     catch (e) { status("スマホのクリップボードを読めない（許可が要る）: " + e.message, true); return; }
-    if (!text) { status("スマホのクリップボードが空", true); return; }
     try {
-      await post("/clip", { text });
+      if (text && clipChanged(text)) await post("/clip", { text });  // スマホで新しくコピーしたときだけ（テレビでコピーしたものを上書きしない）
       if (paste) await post("/gesture", { api: "keys", body: { code: 47, hold: [], mods: term ? [29, 42] : [29] } });
-      status(`${paste ? "貼り付け" : "テレビへ写した"}：${text.slice(0, 30)}${text.length > 30 ? "…" : ""}`);
+      status(`${paste ? "貼り付け" : "テレビへ写した"}`);
     } catch (e) { status("失敗: " + e.message, true); }
+  }
+  // 前にテレビへ写したスマホのクリップボード。同じままなら写さない（テレビの Ctrl＋C でコピーしたものを、スマホの古い中身で上書きしないように）
+  function clipChanged(t) {
+    let last = null; try { last = localStorage.getItem("lastClip"); } catch (e) {}
+    if (last === t) return false;
+    try { localStorage.setItem("lastClip", t); } catch (e) {}
+    return true;
   }
   // このページの中でコピーしたら、テレビのクリップボードにも写す
   document.addEventListener("copy", () => {
     const t = String(getSelection() || "");
-    if (t) post("/clip", { text: t }).catch(() => {});
+    if (t && clipChanged(t)) post("/clip", { text: t }).catch(() => {});
   });
   // 動作を行う：local はスマホの中だけ（読み直しなど）、ほかは /gesture でテレビへ
   function gestDo(hit, who) {
@@ -1696,7 +1702,7 @@
     }
     if (code === 47 && pcMod[29]) {  // Ctrl＋V：先にスマホでコピーしたものをテレビのクリップボードへ写してから
       const clip = navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText().catch(() => "") : Promise.resolve("");
-      enqueue(async () => { const t = await clip; if (t) await post("/clip", { text: t }).catch(() => {}); await post("/kbd", { code, mods: [] }); });
+      enqueue(async () => { const t = await clip; if (t && clipChanged(t)) await post("/clip", { text: t }).catch(() => {}); await post("/kbd", { code, mods: [] }); });
       pcConsume();
       return;
     }
