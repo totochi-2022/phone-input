@@ -1172,15 +1172,56 @@
     clearTimeout(gestFlash.t); gestFlash.t = setTimeout(() => { el.style.opacity = 0; setTimeout(() => { if (el.style.opacity === "0") el.textContent = ""; }, 500); }, ms);
   }
   // 実験：左下を押さえて描いた形に番号を付けて覚え（gestNum）、左上で描いたら一番近い番号と % を出す
-  const numLoad = () => { try { return JSON.parse(localStorage.getItem("gestNum") || "[]"); } catch (e) { return []; } };
-  const numStore = (v) => { try { localStorage.setItem("gestNum", JSON.stringify(v)); } catch (e) {} };
+  // 置き場所の名前を変えて、前の登録（gestNum）は捨てる（2026-11-26、直線・角を見る版にしたとき）
+  try { localStorage.removeItem("gestNum"); } catch (e) {}
+  const numLoad = () => { try { return JSON.parse(localStorage.getItem("gestNum2") || "[]"); } catch (e) { return []; } };
+  const numStore = (v) => { try { localStorage.setItem("gestNum2", JSON.stringify(v)); } catch (e) {} };
+  // 線を 直（まっすぐ）・曲（カーブ）・角（急に曲がる所）に分けて並べる。n は gtNorm の 64 点
+  const SEG_K = 3, CORNER_DEG = 45, STRAIGHT_DEG = 30;
+  function gtShape(n0) {
+    // 指の揺れをならす（前後 2 点との平均を 2 回。端は動かさない）
+    let n = n0;
+    for (let r = 0; r < 2; r++) n = n.map((q, i) => (i < 2 || i > n.length - 3) ? q :
+      [(n[i - 2][0] + n[i - 1][0] + q[0] + n[i + 1][0] + n[i + 2][0]) / 5, (n[i - 2][1] + n[i - 1][1] + q[1] + n[i + 1][1] + n[i + 2][1]) / 5]);
+    const N = n.length, ang = new Array(N).fill(0);
+    for (let i = SEG_K; i < N - SEG_K; i++) {
+      const a1 = Math.atan2(n[i][1] - n[i - SEG_K][1], n[i][0] - n[i - SEG_K][0]);
+      const a2 = Math.atan2(n[i + SEG_K][1] - n[i][1], n[i + SEG_K][0] - n[i][0]);
+      let d = (a2 - a1) * 180 / Math.PI; while (d > 180) d -= 360; while (d < -180) d += 360;
+      ang[i] = d;
+    }
+    // 角：|曲がり| が CORNER_DEG を超える山の頂上（近い山は 1 つに）
+    const corners = [];
+    for (let i = SEG_K; i < N - SEG_K; i++) {
+      const a = Math.abs(ang[i]);
+      if (a > CORNER_DEG && a >= Math.abs(ang[i - 1]) && a >= Math.abs(ang[i + 1])) {
+        if (corners.length && i - corners[corners.length - 1] <= SEG_K * 2) {
+          if (a > Math.abs(ang[corners[corners.length - 1]])) corners[corners.length - 1] = i;
+        } else corners.push(i);
+      }
+    }
+    // 角と角の間：角のまわり（±SEG_K）を除いた曲がりの合計が小さければ 直、大きければ 曲（短すぎる間は数えない）
+    const out = [], cuts = [0, ...corners, N - 1];
+    for (let c = 0; c < cuts.length - 1; c++) {
+      const a = cuts[c] + (c ? SEG_K : 0), b = cuts[c + 1] - (c < cuts.length - 2 ? SEG_K : 0);
+      if (b - a >= 3) {
+        let turn = 0; for (let i = Math.max(a, SEG_K); i <= Math.min(b, N - SEG_K - 1); i++) turn += ang[i] / SEG_K;
+        out.push(Math.abs(turn) < STRAIGHT_DEG ? "直" : "曲");
+      }
+      if (c < cuts.length - 2) out.push("角");
+    }
+    return out.join("");
+  }
+  const SHAPE_PEN = 0.08;  // 並びがお手本と違えば ずれ に足す（50% の境目 0.18 の半分くらい）
   function numRank(pts) {  // 番号ごとの一番合う % を高い順に
     const n = gtNorm(pts); if (!n) return [];
-    const vs = gtVariants(n);
+    const vs = gtVariants(n), myShape = gtShape(n);
+    numRank.shape = myShape;
     return numLoad().map((t, i) => {
       let best = 9;
       for (const v of vs) { let d = 0; for (let k = 0; k < GT_N; k++) d += Math.hypot(v[k][0] - t[k][0], v[k][1] - t[k][1]); best = Math.min(best, d / GT_N); }
-      return { no: i + 1, d: best, tpl: t };
+      const sh = gtShape(t), pen = sh === myShape ? 0 : SHAPE_PEN;
+      return { no: i + 1, d: best + pen, raw: best, shape: sh, tpl: t };
     }).sort((a, b) => a.d - b.d);
   }
   function gestFinish() {
@@ -1189,15 +1230,15 @@
     if (g.reg) {  // 左下：登録
       const n = gtNorm(g.pts), v = numLoad(); v.push(n); numStore(v);
       gcvDraw(g.pts); gcvFade(2500);
-      gestFlash(`${v.length} 番に登録`, true, 2500); if (navigator.vibrate) navigator.vibrate([60, 80, 60]);
+      gestFlash(`${v.length} 番に登録\n${gtShape(n) || "（並びなし）"}`, true, 2500); if (navigator.vibrate) navigator.vibrate([60, 80, 60]);
       return;
     }
     const rk = numRank(g.pts);
     if (rk.length) {  // 左上：番号で見分ける（送らない）
       const top = rk[0], ok = top.d < GT_OK;
-      gcvDraw(g.pts, top.tpl); gcvFade(4000);
-      const second = rk[1] ? `\n次は ${rk[1].no} 番 ${gtPct(rk[1].d)}%` : "";
-      gestFlash(`${ok ? "" : "？ "}${top.no} 番 ${gtPct(top.d)}%${second}`, ok, 4000);
+      gcvDraw(g.pts, top.tpl); gcvFade(5000);
+      const line = (r) => `${r.no} 番 ${gtPct(r.d)}%（形だけ ${gtPct(r.raw)}%・${r.shape === numRank.shape ? "並び同じ" : r.shape || "なし"}）`;
+      gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? "" : "？ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}`, ok, 5000);
       if (navigator.vibrate) navigator.vibrate(ok ? 60 : [40, 60, 40]);
       return;
     }
