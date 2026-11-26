@@ -1239,6 +1239,16 @@ class Handler(BaseHTTPRequestHandler):
                                              headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=8) as r:
                     r.read()
+            elif path == "/gesture":  # 🎮 操作のパッドのジェスチャー：autotube の /api/…（tabs・video・jump・fullscreen だけ）へ渡す
+                import urllib.request
+                api = str(data.get("api", ""))
+                if api not in ("tabs", "video", "jump", "fullscreen"):
+                    return self._reply(400, b"bad api")
+                req = urllib.request.Request("http://127.0.0.1:8766/api/" + api, method="POST",
+                                             data=json.dumps(data.get("body") or {}).encode(),
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    r.read()
             elif path == "/cast":  # 共有（/share）から：autotube の「テレビに送る」に渡す
                 import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8766/api/cast", method="POST",

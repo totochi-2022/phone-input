@@ -22,7 +22,12 @@
   h2 { font-size: 14px; color: #999; margin: 14px 0 0; font-weight: normal; }
   .grid small { display: block; font-size: 11px; color: #aaa; }
   .padwrap { display: flex; gap: 8px; margin-top: 8px; height: 34vh; }
-  #pad { flex: 1; background: #1c1f26; border: 1px solid #446; border-radius: 10px; touch-action: none; }
+  #pad { flex: 1; background: #1c1f26; border: 1px solid #446; border-radius: 10px; touch-action: none; position: relative;
+         background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 52px, transparent 54px); }
+  #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 52px, transparent 54px); }
+  #pad.gdraw { border-color: #8ab4ff; }
+  #gestMsg { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 20px; pointer-events: none;
+             transition: opacity .4s; opacity: 0; } #gestMsg.ok { color: #8f8; } #gestMsg.ng { color: #f99; }
   #wheel { width: 56px; background: #262033; border: 1px solid #546; border-radius: 10px; touch-action: none;
            display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 8px 0;
            box-sizing: border-box; font-size: 20px; color: #998; user-select: none; text-align: center; }
@@ -214,6 +219,7 @@
 <h3>この画面（リモコン）</h3>
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える。動く量は ⚙ 設定の「🖱 マウスのパッド」で</td></tr>
+<tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
 <tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る。帯の両端の「端末」「動画」でテレビをそこへ（F7＋T／F7＋M と同じ）</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
@@ -1047,40 +1053,105 @@
   const mouseOp = (op, button) => { ops.push({ op, button }); flush(); };
   const click = (button) => mouseOp("click", button);
 
-  function track(el, onMove, onTap) {
-    let last = null, start = null, moved = 0;
-    el.addEventListener("pointerdown", (e) => {
-      el.setPointerCapture(e.pointerId);
-      last = start = { x: e.clientX, y: e.clientY, t: Date.now() }; moved = 0;
-    });
-    el.addEventListener("pointermove", (e) => {
-      if (!last) return;
-      const dx = e.clientX - last.x, dy = e.clientY - last.y;
-      moved += Math.abs(dx) + Math.abs(dy);
-      last = { x: e.clientX, y: e.clientY };
-      onMove(dx, dy);
-    });
-    const end = () => {
-      if (start && onTap && moved < 8 && Date.now() - start.t < 300) onTap();
-      last = start = null;
-    };
-    el.addEventListener("pointerup", end);
-    el.addEventListener("pointercancel", () => { last = start = null; });
+  // パッド：1 本指＝マウス（なぞる＝移動、タップ＝クリック）。
+  // ジェスチャー：左上の角（CORNER px）を 1 本の指で押さえたまま、もう 1 本の指でなぞる → 向きの並びで操作（GESTURES）。
+  // 角の指が押さえる前に動いたら（15px）普通のマウスの指として扱う。角を短くタップしたら普通のクリック
+  const GESTURES = {  // 操作は autotube の /api/…（🎮 操作のボタンと同じ）を phone-input の /gesture 経由で
+    "←": ["tabs", { how: "prev", solo: true }, "◀ 前のタブ"],
+    "→": ["tabs", { how: "next", solo: true }, "次のタブ ▶"],
+    "↓→": ["tabs", { how: "close", solo: true }, "✕ タブを閉じる"],
+    "↑": ["fullscreen", {}, "⛶ 全画面"],
+    "↓": ["jump", { where: "term", solo: true }, "端末へ"],
+    "→←": ["jump", { where: "video", solo: true }, "動画へ"],
+    "↑↓": ["video", { cmd: "toggle" }, "⏯ 再生・一時停止"],
+  };
+  const pad = $("pad"), CORNER = 70, SEG = 28;
+  let anchor = null, mouse = null, gest = null;
+  const padLocal = (e) => { const r = pad.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const padSkip = (e) => (anchor && e.pointerId === anchor.id) || (gest && e.pointerId === gest.id);
+  function gestFlash(text, ok) {  // パッドの真ん中に一瞬出す
+    let el = $("gestMsg");
+    if (!el) { el = document.createElement("div"); el.id = "gestMsg"; pad.append(el); }
+    el.textContent = text; el.className = ok ? "ok" : "ng"; el.style.opacity = 1;
+    clearTimeout(gestFlash.t); gestFlash.t = setTimeout(() => { el.style.opacity = 0; }, 1200);
   }
-  track($("pad"), (dx, dy) => {
+  function gestFinish() {
+    const g = gest; gest = null; pad.classList.remove("gdraw");
+    if (!g || g.len < 40) { gestFlash("短すぎ", false); return; }
+    const key = g.dirs.join(""), hit = GESTURES[key];
+    if (!hit) { gestFlash(key + "（割り当てなし）", false); if (navigator.vibrate) navigator.vibrate([40, 60, 40]); return; }
+    gestFlash(key + " " + hit[2], true); if (navigator.vibrate) navigator.vibrate(60);
+    post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${key}：${hit[2]}`))
+      .catch((err) => status("失敗: " + err.message, true));
+  }
+  pad.addEventListener("pointerdown", (e) => {
+    pad.setPointerCapture(e.pointerId);
+    const [x, y] = padLocal(e);
+    if (anchor && !gest && e.pointerId !== anchor.id) {  // 角を押さえたまま 2 本目 → ジェスチャー
+      anchor.used = true;
+      gest = { id: e.pointerId, seg: [x, y], last: [x, y], dirs: [], len: 0 };
+      pad.classList.add("gdraw");
+      return;
+    }
+    if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && y < CORNER) {
+      anchor = { id: e.pointerId, x, y, t: Date.now(), used: false };
+      pad.classList.add("gcorner");
+      return;
+    }
+    if (!mouse && !gest) mouse = { id: e.pointerId, last: [e.clientX, e.clientY], t: Date.now(), moved: 0 };
+  });
+  pad.addEventListener("pointermove", (e) => {
+    if (gest && e.pointerId === gest.id) {
+      const [x, y] = padLocal(e);
+      gest.len += Math.hypot(x - gest.last[0], y - gest.last[1]); gest.last = [x, y];
+      const dx = x - gest.seg[0], dy = y - gest.seg[1];
+      if (Math.hypot(dx, dy) >= SEG) {  // 区切りごとに上下左右のどれかに直す。同じ向きが続いたらまとめる
+        const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "→" : "←") : (dy > 0 ? "↓" : "↑");
+        if (gest.dirs[gest.dirs.length - 1] !== d) gest.dirs.push(d);
+        gest.seg = [x, y];
+      }
+      return;
+    }
+    if (anchor && e.pointerId === anchor.id) {
+      if (anchor.used || mouse) return;
+      const [x, y] = padLocal(e);
+      if (Math.hypot(x - anchor.x, y - anchor.y) > 15) {  // 角から動かした → 普通のマウスの指
+        mouse = { id: anchor.id, last: [e.clientX, e.clientY], t: anchor.t, moved: 99 };
+        anchor = null; pad.classList.remove("gcorner");
+      }
+      return;
+    }
+    if (!mouse || e.pointerId !== mouse.id) return;
+    const dx = e.clientX - mouse.last[0], dy = e.clientY - mouse.last[1];
+    mouse.moved += Math.abs(dx) + Math.abs(dy); mouse.last = [e.clientX, e.clientY];
     const f = SPEED0 * padMul * (1 + Math.min(Math.hypot(dx, dy) / 12, 2));  // 速く動かすほど大きく動く
     acc.x += dx * f; acc.y += dy * f;
-  }, () => click("left"));
-  // パッドの端に指が来たら震える（見ずになぞっていても境が分かるように）。内側へ 55px 戻ると次も震える
+  });
+  const padUp = (e, ok) => {
+    if (gest && e.pointerId === gest.id) { if (ok) gestFinish(); else { gest = null; pad.classList.remove("gdraw"); } return; }
+    if (anchor && e.pointerId === anchor.id) {
+      if (ok && !anchor.used && Date.now() - anchor.t < 300) click("left");
+      anchor = null; pad.classList.remove("gcorner");
+      return;
+    }
+    if (mouse && e.pointerId === mouse.id) {
+      if (ok && mouse.moved < 8 && Date.now() - mouse.t < 300) click("left");
+      mouse = null;
+    }
+  };
+  pad.addEventListener("pointerup", (e) => padUp(e, true));
+  pad.addEventListener("pointercancel", (e) => padUp(e, false));
+  // パッドの端に指が来たら震える（見ずになぞっていても境が分かるように）。内側へ 55px 戻ると次も震える。角の指・ジェスチャーの指は除く
   {
-    const pad = $("pad"); let edgeOn = false;
+    let edgeOn = false;
     const edgeCheck = (e) => {
+      if (padSkip(e)) return;
       const r = pad.getBoundingClientRect();
       const d = Math.min(e.clientX - r.left, r.right - e.clientX, e.clientY - r.top, r.bottom - e.clientY);
       if (!edgeOn && d < 30) { edgeOn = true; if (navigator.vibrate) navigator.vibrate(120); }
       else if (edgeOn && d > 55) edgeOn = false;
     };
-    pad.addEventListener("pointerdown", (e) => { edgeOn = false; edgeCheck(e); });
+    pad.addEventListener("pointerdown", (e) => { edgeOn = false; if (!anchor || e.pointerId !== anchor.id) edgeCheck(e); });
     pad.addEventListener("pointermove", (e) => { if (e.buttons || e.pointerType === "touch") edgeCheck(e); });
   }
   // スクロール：帯を押している間ずっと動く。真ん中より上なら上へ、下なら下へ。端に近いほど速い
