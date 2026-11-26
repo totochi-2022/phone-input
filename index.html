@@ -225,7 +225,7 @@
 <h3>この画面（リモコン）</h3>
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える。動く量は ⚙ 設定の「🖱 マウスのパッド」で</td></tr>
-<tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。⚙ 設定の「✍ ジェスチャーを覚える」で好きな形を動作に割り当てられる（覚えた形が先）</td></tr>
+<tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。左下（橙の丸）を押さえて同じ形を 3 回描くと番号と名前を付けて登録、⚙ 設定の「✍ ジェスチャー」で動作を選ぶ（登録があればそちらで見分ける）</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
 <tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る。帯の両端の「端末」「動画」でテレビをそこへ（F7＋T／F7＋M と同じ）</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
@@ -333,15 +333,10 @@
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
   <label style="font-size:14px">動く量 <span style="color:#888;font-size:12px">少ない</span> <input type="range" id="padSpeed" min="0.4" max="3" step="0.1" value="1" style="width:130px;vertical-align:middle"> <span style="color:#888;font-size:12px">多い</span>　<span id="padSpeedV">1.0</span> 倍</label>
 </div>
-<h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">✍ ジェスチャーを覚える</h3>
-<div style="font-size:13px;color:#aaa;margin-bottom:6px">🎮 操作のパッドで、左上の角を押さえたまま描く形を覚えさせる。動作を選んで下の枠に 1 本指で 3 回描き「覚える」。覚えた形が先、合わなければ決まりの形（← → など）</div>
+<h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">✍ ジェスチャー</h3>
+<div style="font-size:13px;color:#aaa;margin-bottom:6px">🎮 操作のパッドで：左下（橙の丸）を押さえたまま同じ形を 3 回（15 秒以内に続けて）描く＝登録（番号と名前）。左上（青の丸）を押さえたまま描く＝見分けて、下で選んだ動作をテレビへ。境目は 3 回のぶれから決まる</div>
 <label style="font-size:15px;display:block;margin-bottom:6px"><input type="checkbox" id="gestTest"> 試すだけ（テレビに送らず、何と見分けたかをパッドに出す）</label>
-<div class="row" style="align-items:center;gap:6px"><select id="gtAct" style="flex:1;font-size:15px;padding:6px"></select>
-  <button id="gtSave" style="flex:0 0 auto;width:auto;padding:8px 12px">覚える</button><button id="gtRedo" style="flex:0 0 auto;width:auto;padding:8px 12px">描き直す</button></div>
-<canvas id="gtCanvas" style="display:block;width:100%;height:200px;margin-top:6px;background:#1c1f26;border:1px solid #446;border-radius:10px;touch-action:none"></canvas>
-<div id="gtInfo" style="font-size:13px;color:#aaa;margin:4px 0">0/3 回</div>
 <div id="gtList" style="font-size:14px"></div>
-<div style="font-size:13px;color:#aaa;margin-top:8px">実験：パッドの左下（橙の丸）を押さえて同じ形を 3 回（15 秒以内に続けて）描くと番号を付けて登録し、3 回のぶれからその形の境目を決める。左上で描くと一番近い番号と点数・境目を出す（テレビには送らない）。<button id="numClr" style="width:auto;padding:6px 10px;font-size:13px">番号の登録を全部消す</button> <span id="numCnt"></span></div>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">📳 振って画面を移る</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
   <label><input type="checkbox" id="shakeNav"> はたく（手前・奥へ倒す）＝🤖 Claude に頼む、ひねる＝▶ autotube、立てたまま 2 回回す＝🎮 操作</label>
@@ -1109,8 +1104,6 @@
     const cx = xs.reduce((a, b) => a + b) / GT_N, cy = ys.reduce((a, b) => a + b) / GT_N;
     return out.map((q) => [(q[0] - cx) / sz, (q[1] - cy) / sz]);
   }
-  const gtLoad = () => { try { return JSON.parse(localStorage.getItem("gestTpl") || "[]"); } catch (e) { return []; } };
-  const gtStore = (v) => { try { localStorage.setItem("gestTpl", JSON.stringify(v)); } catch (e) {} };
   // 少しの傾き（±20°）と縦横の伸び縮み（0.7〜1.4 倍）を試して、いちばん合うところで比べる（向き・形の区別は残す）
   const GT_ROT = [-20, -10, 0, 10, 20].map((d) => d * Math.PI / 180), GT_ASP = [0.7, 0.84, 1, 1.19, 1.4];
   function gtVariants(n) {
@@ -1125,16 +1118,6 @@
     return out;
   }
   const gtPct = (d) => Math.max(0, Math.round(100 * (1 - d / (GT_OK * 2))));  // ずれ 0 ＝ 100%、採用の境目 ＝ 50%
-  function gtMatch(pts) {  // いちばん近いお手本 { act, d, tpl }（無ければ null）
-    const n = gtNorm(pts); if (!n) return null;
-    const vs = gtVariants(n);
-    let best = null;
-    for (const t of gtLoad()) for (const s of t.samples) for (const v of vs) {
-      let d = 0; for (let i = 0; i < GT_N; i++) d += Math.hypot(v[i][0] - s[i][0], v[i][1] - s[i][1]);
-      d /= GT_N; if (!best || d < best.d) best = { act: t.act, d, tpl: s };
-    }
-    return best;
-  }
   // パッドの上の線：なぞっている線（青）と、見分けたらお手本（緑）を重ねる
   let gcv = null;
   function gcvGet() {
@@ -1230,7 +1213,7 @@
     return numEntries().map((e, i) => {
       let best = null;
       for (const t of e.samples) { const r = gtDist(vs, myShape, t); if (!best || r.d < best.d) best = { ...r, tpl: t }; }
-      return { no: i + 1, ...best, thr: e.thr, cnt: e.samples.length };
+      return { no: i + 1, ...best, thr: e.thr, cnt: e.samples.length, name: e.name, act: e.act };
     }).sort((a, b) => a.d - b.d);
   }
   function numRegister(n) {  // 左下で描いた形を登録。続けて描けば同じ番号の 2・3 回目、3 回そろえば境目を決める
@@ -1253,8 +1236,10 @@
       }
       e.thr = worst + THR_MARGIN; regLast = null;
       msg = `${no} 番 登録できた　●●●\n3 回の一番低い組 ${gtPct(worst)} 点 → 境目 ${gtPct(e.thr)} 点`;
+      numStore(v); gtListDraw(); setTimeout(() => askName(no, msg), 300);
+      return { ok: true, msg };
     }
-    numStore(v);
+    numStore(v); gtListDraw();
     return { ok: true, msg };
   }
   function gestFinish() {
@@ -1271,26 +1256,21 @@
       const top = rk[0], thr = top.thr != null ? top.thr : GT_OK, ok = top.d < thr;
       const close = ok && rk[1] && gtPct(top.d) - gtPct(rk[1].d) < 10;  // 2 番目と 10 点差より近いと「？」
       gcvDraw(g.pts, top.tpl); gcvFade(5000);
-      const line = (r) => `${r.no} 番 ${gtPct(r.d)} 点（境目 ${gtPct(r.thr != null ? r.thr : GT_OK)}${r.cnt < REG_N ? "・仮" : ""}）${r.shape === numRank.shape ? "" : "・並び " + (r.shape || "なし")}`;
-      gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? (close ? "？ " : "✓ ") : "✗ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}`, ok && !close, 5000);
-      if (navigator.vibrate) navigator.vibrate(ok && !close ? 60 : [40, 60, 40]);
+      const line = (r) => `${r.no} 番${r.name ? "「" + r.name + "」" : ""} ${gtPct(r.d)} 点（境目 ${gtPct(r.thr != null ? r.thr : GT_OK)}${r.cnt < REG_N ? "・仮" : ""}）${r.shape === numRank.shape ? "" : "・並び " + (r.shape || "なし")}`;
+      const go = ok && !close, hit = go && top.act && ACTIONS[top.act];
+      const what = !go ? "" : hit ? `\n→ ${hit[2]}${gestTest ? "（試すだけ・送らない）" : ""}` : "\n→ 動作なし（⚙ で選ぶ）";
+      gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? (close ? "？ " : "✓ ") : "✗ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}${what}`, go, 5000);
+      if (navigator.vibrate) navigator.vibrate(go ? 60 : [40, 60, 40]);
+      if (hit && !gestTest) post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${top.name || top.no + " 番"}：${hit[2]}`))
+        .catch((err) => status("失敗: " + err.message, true));
       return;
     }
-    const key = g.dirs.join(""), m = gtMatch(g.pts);
-    let act = null, shown = key;
-    if (m && m.d < GT_OK) { act = m.act; shown = `✍ ${gtPct(m.d)}%`; }  // 覚えた形が先
-    else if (GESTURES[key]) act = GESTURES[key];
-    const hit = act && ACTIONS[act];
-    gcvDraw(g.pts, m && m.d < GT_OK * 1.6 ? m.tpl : null); gcvFade(gestTest ? 4000 : 1200);
-    if (gestTest) {  // 試すだけ：見分けた中身を出して、送らない
-      const near = m ? `一番近い形：${(ACTIONS[m.act] || [, , m.act])[2]} ${gtPct(m.d)}%（50% 以上で採用）` : "覚えた形：なし";
-      gestFlash(`向き ${key || "（なし）"}\n${near}\n→ ${hit ? hit[2] : "割り当てなし"}`, !!hit, 4000);
-      if (navigator.vibrate) navigator.vibrate(hit ? 60 : [40, 60, 40]);
-      return;
-    }
+    // 登録が 1 つも無いときは決まりの形（← → など）
+    const key = g.dirs.join(""), act = GESTURES[key], hit = act && ACTIONS[act];
+    gcvDraw(g.pts); gcvFade(gestTest ? 4000 : 1200);
     if (!hit) { gestFlash(key + "（割り当てなし）", false); if (navigator.vibrate) navigator.vibrate([40, 60, 40]); return; }
-    gestFlash(shown + " " + hit[2], true); if (navigator.vibrate) navigator.vibrate(60);
-    post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${shown}：${hit[2]}`))
+    gestFlash(key + " " + hit[2] + (gestTest ? "（試すだけ）" : ""), true, gestTest ? 4000 : 1200); if (navigator.vibrate) navigator.vibrate(60);
+    if (!gestTest) post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${key}：${hit[2]}`))
       .catch((err) => status("失敗: " + err.message, true));
   }
   pad.addEventListener("pointerdown", (e) => {
@@ -1366,58 +1346,50 @@
     pad.addEventListener("pointerdown", (e) => { edgeOn = false; if (!anchor || e.pointerId !== anchor.id) edgeCheck(e); });
     pad.addEventListener("pointermove", (e) => { if (e.buttons || e.pointerType === "touch") edgeCheck(e); });
   }
-  // ⚙ の「✍ ジェスチャーを覚える」：枠に 3 回描いてお手本に。同じ動作にもう一度覚えさせると置き換え
-  {
-    const cv = $("gtCanvas"), sel = $("gtAct");
-    for (const [k, v] of Object.entries(ACTIONS)) sel.add(new Option(v[2], k));
-    let samples = [], strokes = [], cur = null;
-    const ctx = cv.getContext("2d");
-    function draw() {
-      const r = cv.getBoundingClientRect(); cv.width = r.width; cv.height = r.height;
-      ctx.lineWidth = 4; ctx.lineCap = ctx.lineJoin = "round";
-      [...strokes, cur].filter(Boolean).forEach((pts, i, all) => {
-        ctx.strokeStyle = i === all.length - 1 && cur ? "#8ab4ff" : "#4a6a9a";
-        ctx.beginPath(); pts.forEach((q, j) => (j ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.stroke();
-      });
-      $("gtInfo").textContent = `${samples.length}/3 回` + (samples.length >= 3 ? "（「覚える」を押す）" : "");
+  // 3 回描き終わったら番号と名前（画面の上に小さな窓。パッドの中だと指の処理とぶつかるので body に置く）
+  function askName(no, msg) {
+    let w = $("gtName");
+    if (!w) {
+      w = document.createElement("div"); w.id = "gtName";
+      w.style.cssText = "position:fixed;left:12px;right:12px;top:30%;z-index:50;background:#1a1f28;border:2px solid #8ab4ff;border-radius:12px;padding:12px;font-size:15px";
+      w.innerHTML = '<div id="gtNameMsg" style="white-space:pre-line;margin-bottom:8px"></div><div class="row" style="gap:6px"><input id="gtNameIn" style="flex:1;font-size:17px;padding:8px;background:#222;color:#eee;border:1px solid #555;border-radius:8px" placeholder="名前（例：G・丸・折り返し右）"><button id="gtNameOk" style="flex:0 0 auto;width:auto;padding:8px 14px">決める</button><button id="gtNameNo" style="flex:0 0 auto;width:auto;padding:8px 10px">あとで</button></div>';
+      document.body.append(w);
     }
-    const at = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-    cv.addEventListener("pointerdown", (e) => { cv.setPointerCapture(e.pointerId); cur = [at(e)]; draw(); });
-    cv.addEventListener("pointermove", (e) => { if (cur) { cur.push(at(e)); draw(); } });
-    cv.addEventListener("pointerup", () => {
-      if (!cur) return;
-      const n = gtNorm(cur);
-      if (n && cur.length > 4) { samples.push(n); strokes.push(cur); if (samples.length > 3) { samples.shift(); strokes.shift(); } }
-      cur = null; draw();
-    });
-    cv.addEventListener("pointercancel", () => { cur = null; draw(); });
-    $("gtRedo").onclick = () => { samples = []; strokes = []; draw(); };
-    function list() {
-      const tpl = gtLoad();
-      $("gtList").innerHTML = tpl.length ? "" : '<span style="color:#888">覚えた形はまだ無い</span>';
-      tpl.forEach((t, i) => {
-        const d = document.createElement("div"); d.style.cssText = "display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #2a2a2a";
-        const c = document.createElement("canvas"); c.width = c.height = 40; c.style.cssText = "background:#1c1f26;border-radius:6px";
-        const g = c.getContext("2d"); g.strokeStyle = "#8ab4ff"; g.lineWidth = 2; g.beginPath();
-        t.samples[0].forEach((q, j) => (j ? g.lineTo(20 + q[0] * 32, 20 + q[1] * 32) : g.moveTo(20 + q[0] * 32, 20 + q[1] * 32))); g.stroke();
-        const lab = document.createElement("span"); lab.style.flex = "1"; lab.textContent = (ACTIONS[t.act] || [, , t.act])[2];
-        const del = document.createElement("button"); del.textContent = "消す"; del.style.cssText = "flex:0 0 auto;width:auto;padding:6px 10px;font-size:13px";
-        del.onclick = () => { const v = gtLoad(); v.splice(i, 1); gtStore(v); list(); };
-        d.append(c, lab, del); $("gtList").append(d);
-      });
-    }
-    $("gtSave").onclick = () => {
-      if (samples.length < 2) { $("gtInfo").textContent = "2 回以上描いてから"; return; }
-      const v = gtLoad().filter((t) => t.act !== sel.value);
-      v.push({ act: sel.value, samples }); gtStore(v);
-      samples = []; strokes = []; draw(); list();
+    $("gtNameMsg").textContent = msg + "\n名前を付ける（動作は ⚙ の ✍ ジェスチャーで選ぶ）";
+    $("gtNameIn").value = ""; w.style.display = "block"; $("gtNameIn").focus();
+    const done = (save) => {
+      if (save) { const v = numEntries(); if (v[no - 1]) { v[no - 1].name = $("gtNameIn").value.trim(); numStore(v); gtListDraw(); } }
+      w.style.display = "none"; $("gtNameIn").blur();
     };
-    list(); setTimeout(draw, 0);
-    const numShow = () => { $("numCnt").textContent = `今 ${numLoad().length} 個`; };
-    $("numClr").onclick = () => { numStore([]); numShow(); };
-    numShow();
-    document.addEventListener("visibilitychange", numShow); setInterval(numShow, 3000);
+    $("gtNameOk").onclick = () => done(true); $("gtNameNo").onclick = () => done(false);
+    $("gtNameIn").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) done(true); };
   }
+  // ⚙ の一覧：絵・番号・名前（直せる）・動作（選べる）・境目・消す
+  function gtListDraw() {
+    const box = $("gtList"), v = numEntries();
+    box.innerHTML = v.length ? "" : '<span style="color:#888">登録はまだ無い（パッドの左下を押さえて 3 回描く）</span>';
+    v.forEach((t, i) => {
+      const d = document.createElement("div"); d.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #2a2a2a";
+      const c = document.createElement("canvas"); c.width = c.height = 40; c.style.cssText = "flex:none;background:#1c1f26;border-radius:6px";
+      const g = c.getContext("2d"); g.strokeStyle = "#8ab4ff"; g.lineWidth = 2; g.beginPath();
+      t.samples[0].forEach((q, j) => (j ? g.lineTo(20 + q[0] * 32, 20 + q[1] * 32) : g.moveTo(20 + q[0] * 32, 20 + q[1] * 32))); g.stroke();
+      const no = document.createElement("span"); no.style.cssText = "flex:none;min-width:2.6em"; no.textContent = `${i + 1} 番`;
+      const nm = document.createElement("input"); nm.value = t.name || ""; nm.placeholder = "名前";
+      nm.style.cssText = "flex:1;min-width:0;font-size:14px;padding:5px;background:#222;color:#eee;border:1px solid #444;border-radius:6px";
+      nm.onchange = () => { const w = numEntries(); w[i].name = nm.value.trim(); numStore(w); };
+      const sel = document.createElement("select"); sel.style.cssText = "flex:1;min-width:0;font-size:13px;padding:5px";
+      sel.add(new Option("（動作なし）", ""));
+      for (const [k, a] of Object.entries(ACTIONS)) sel.add(new Option(a[2], k));
+      sel.value = t.act || "";
+      sel.onchange = () => { const w = numEntries(); w[i].act = sel.value; numStore(w); };
+      const th = document.createElement("span"); th.style.cssText = "flex:none;font-size:11px;color:#888";
+      th.textContent = t.samples.length < REG_N ? `仮 ${t.samples.length}/${REG_N}` : `境目 ${gtPct(t.thr)}`;
+      const del = document.createElement("button"); del.textContent = "消す"; del.style.cssText = "flex:none;width:auto;padding:5px 8px;font-size:12px";
+      del.onclick = () => { if (!confirm(`${i + 1} 番${t.name ? "「" + t.name + "」" : ""}を消す？（後ろの番号は 1 つずつ詰まる）`)) return; const w = numEntries(); w.splice(i, 1); numStore(w); regLast = null; gtListDraw(); };
+      d.append(c, no, nm, sel, th, del); box.append(d);
+    });
+  }
+  gtListDraw();
   // スクロール：帯を押している間ずっと動く。真ん中より上なら上へ、下なら下へ。端に近いほど速い
   const wheel = $("wheel");
   let wheelRate = 0, wheelTimer = null;
