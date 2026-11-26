@@ -1240,11 +1240,27 @@ class Handler(BaseHTTPRequestHandler):
                                              headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=8) as r:
                     r.read()
-            elif path == "/gestures":  # スマホで登録したジェスチャー（お手本・境目・動作）の写し。キーボードのジェスチャー（kbgesture.py）が読む
-                GESTURES_FILE.parent.mkdir(parents=True, exist_ok=True)
-                tmp = GESTURES_FILE.with_suffix(".tmp")
-                tmp.write_text(json.dumps(data.get("entries", []), ensure_ascii=False))
-                tmp.replace(GESTURES_FILE)
+            elif path == "/gestures":  # スマホで登録したジェスチャー（お手本・境目・動作）の写し。キーボードのジェスチャー（kbgesture.py）も読む
+                if data.get("get"):  # スマホの登録が消えたとき・「テレビの保存から戻す」で読み戻す
+                    body = GESTURES_FILE.read_bytes() if GESTURES_FILE.exists() else b"[]"
+                    return self._reply(200, body, "application/json")
+                entries = data.get("entries", [])
+                old = GESTURES_FILE.read_text() if GESTURES_FILE.exists() else "[]"
+                if not entries and old.strip() not in ("", "[]") and not data.get("allowEmpty"):
+                    return self._reply(409, b"empty")  # 空で上書きしない（スマホの登録が消えただけのことがある）
+                new = json.dumps(entries, ensure_ascii=False)
+                if new != old:
+                    GESTURES_FILE.parent.mkdir(parents=True, exist_ok=True)
+                    bak = GESTURES_FILE.parent / "gestures-bak"
+                    bak.mkdir(exist_ok=True)
+                    olds = sorted(bak.glob("*.json"))
+                    if old.strip() not in ("", "[]") and (not olds or time.time() - olds[-1].stat().st_mtime > 3600):
+                        (bak / time.strftime("%Y%m%d-%H%M%S.json")).write_text(old)  # 1 時間に 1 つまで控え、30 個まで
+                        for f in sorted(bak.glob("*.json"))[:-30]:
+                            f.unlink()
+                    tmp = GESTURES_FILE.with_suffix(".tmp")
+                    tmp.write_text(new)
+                    tmp.replace(GESTURES_FILE)
             elif path == "/gesture":  # 🎮 操作のパッドのジェスチャー：autotube の /api/…（tabs・video・jump・fullscreen だけ）へ渡す
                 import urllib.request
                 api = str(data.get("api", ""))
