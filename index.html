@@ -1115,6 +1115,7 @@
     tcopy: [...key(46, [], [29, K.SHIFT]), "端末でコピー（Ctrl＋Shift＋C）", "編集"],
     tpaste: [...key(47, [], [29, K.SHIFT]), "端末で貼り付け（Ctrl＋Shift＋V）", "編集"],
     undo: [...key(44, [], [29]), "元に戻す（Ctrl＋Z）", "編集"],
+    pagereload: ["local", "reload", "このリモコン（スマホ）のページを読み直す", "スマホ"],
   };
   const GESTURES = { "←": "prev", "→": "next", "↓→": "close", "↑": "full", "↓": "term", "→←": "video", "↑↓": "toggle" };
   // 覚えた形（$1 Recognizer の回さない版）：64 点に並べ直し、重心を原点・長い辺を 1 にそろえ、点ごとの距離の平均で比べる
@@ -1306,8 +1307,7 @@
       const what = !go ? "" : hit ? `\n→ ${hit[2]}${gestTest ? "（試すだけ・送らない）" : ""}` : "\n→ 動作なし（⚙ で選ぶ）";
       gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? (close ? "？ " : "✓ ") : "✗ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}${what}`, go, 5000);
       if (navigator.vibrate) navigator.vibrate(go ? 60 : [40, 60, 40]);
-      if (hit && !gestTest) post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${top.name || top.no + " 番"}：${hit[2]}`))
-        .catch((err) => status("失敗: " + err.message, true));
+      if (hit && !gestTest) gestDo(hit, top.name || top.no + " 番");
       return;
     }
     // 登録が 1 つも無いときは決まりの形（← → など）
@@ -1315,7 +1315,15 @@
     gcvDraw(g.pts); gcvFade(gestTest ? 4000 : 1200);
     if (!hit) { gestFlash(key + "（割り当てなし）", false); if (navigator.vibrate) navigator.vibrate([40, 60, 40]); return; }
     gestFlash(key + " " + hit[2] + (gestTest ? "（試すだけ）" : ""), true, gestTest ? 4000 : 1200); if (navigator.vibrate) navigator.vibrate(60);
-    if (!gestTest) post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${key}：${hit[2]}`))
+    if (!gestTest) gestDo(hit, key);
+  }
+  // 動作を行う：local はスマホの中だけ（読み直しなど）、ほかは /gesture でテレビへ
+  function gestDo(hit, who) {
+    if (hit[0] === "local") {
+      if (hit[1] === "reload") setTimeout(() => location.reload(), 600);  // 震え・表示を見せてから
+      return;
+    }
+    post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${who}：${hit[2]}`))
       .catch((err) => status("失敗: " + err.message, true));
   }
   pad.addEventListener("pointerdown", (e) => {
