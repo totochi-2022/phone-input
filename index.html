@@ -26,8 +26,9 @@
          user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
          background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px),
                            radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 92px, transparent 94px); }
-  #pad:not(.teach), #pad.gcorner:not(.teach) { background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px); }
-  #pad.gcorner:not(.teach) { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 92px, transparent 94px); }
+  /* ティーチングモードでないとき：左の帯（上から下まで）を押さえて描く */
+  #pad:not(.teach) { background-image: linear-gradient(to right, #2c3550 0, #2c3550 92px, transparent 94px); }
+  #pad.gcorner:not(.teach) { background-image: linear-gradient(to right, #3a6ab0 0, #3a6ab0 92px, transparent 94px); }
   #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 92px, transparent 94px),
                            radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 92px, transparent 94px); }
   #pad.gcreg { background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px),
@@ -228,7 +229,7 @@
 <h3>この画面（リモコン）</h3>
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える。動く量は ⚙ 設定の「🖱 マウスのパッド」で</td></tr>
-<tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。⚙ の「ティーチングモード」をオンにすると、左下（橙の丸）を押さえて同じ形を 3 回描くと番号と名前を付けて登録（オフなら左下は普通のパッド）、⚙ 設定の「✍ ジェスチャー」で動作を選ぶ（登録があればそちらで見分ける）</td></tr>
+<tr><td>ジェスチャー</td><td>パッドの左の帯（薄い青、上から下まで。ティーチングモードのときは左上の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。⚙ の「ティーチングモード」をオンにすると、左下（橙の丸）を押さえて同じ形を 3 回描くと番号と名前を付けて登録（オフなら左下は普通のパッド）、⚙ 設定の「✍ ジェスチャー」で動作を選ぶ（登録があればそちらで見分ける）</td></tr>
 <tr><td>キーボードの画面のジェスチャー</td><td>この画面の PC キーボードの Esc・F1・F2 のどれかを押さえたまま（青くなる）、もう 1 本の指でキーボードの上をなぞると、パッドの左上と同じジェスチャー。なぞらずに離せば普通の Esc・F1・F2（離したときに打つ）</td></tr>
 <tr><td>テレビのキーボードのジェスチャー</td><td>テレビのキーボードの Esc・F1・F2 のどれかを押さえたまま、タッチパッド（マウス）で描くと、スマホで登録したジェスチャーとして動く（押している間は矢印が止まる）。動かさずに離せば普通の Esc・F1・F2（離したときに出る）</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
@@ -1400,8 +1401,8 @@
     }
     const ph = pad.getBoundingClientRect().height;
     CORNER = Math.min(110, ph / 2 - 4);
-    if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && (y < CORNER || (gestTeach && y > ph - CORNER))) {
-      const reg = y > ph - CORNER;  // 左上＝見分ける、左下＝番号を付けて登録する（実験）
+    if (!anchor && !mouse && e.pointerType === "touch" && x < (gestTeach ? CORNER : 100) && (!gestTeach || y < CORNER || y > ph - CORNER)) {
+      const reg = gestTeach && y > ph - CORNER;  // 左上（ティーチングモードでなければ左の帯全部）＝見分ける、左下＝登録（ティーチングモードのとき）
       if (!reg) regAbort();
       anchor = { id: e.pointerId, x, y, t: Date.now(), used: false, reg };
       pad.classList.add(reg ? "gcreg" : "gcorner");
