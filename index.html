@@ -1396,8 +1396,15 @@
       for (const [k, a] of Object.entries(ACTIONS)) sel.add(new Option(a[2], k));
       sel.value = t.act || "";
       sel.onchange = () => { const w = numEntries(); w[i].act = sel.value; numStore(w); };
-      const th = document.createElement("span"); th.style.cssText = "flex:none;font-size:11px;color:#888";
-      th.textContent = t.samples.length < REG_N ? `仮 ${t.samples.length}/${REG_N}` : `境目 ${gtPct(t.thr)}`;
+      // 境目：－／＋で 5 点ずつ直せる（点 → ずれ に直して保存。0〜95 点）
+      const th = document.createElement("span"); th.style.cssText = "flex:none;font-size:11px;color:#888;display:flex;align-items:center;gap:2px";
+      if (t.samples.length < REG_N) th.textContent = `仮 ${t.samples.length}/${REG_N}`;
+      else {
+        const val = document.createElement("span"); val.style.cssText = "min-width:2.4em;text-align:center"; val.textContent = `境目\n${gtPct(t.thr)}`; val.style.whiteSpace = "pre";
+        const btn = (lab, dp) => { const b = document.createElement("button"); b.textContent = lab; b.style.cssText = "flex:none;width:auto;padding:4px 7px;font-size:13px";
+          b.onclick = () => { const w = numEntries(), p = Math.min(95, Math.max(0, gtPct(w[i].thr) + dp)); w[i].thr = (1 - p / 100) * GT_OK * 2; numStore(w); val.textContent = `境目\n${p}`; }; return b; };
+        th.append(btn("－", -5), val, btn("＋", 5));
+      }
       const del = document.createElement("button"); del.textContent = "消す"; del.style.cssText = "flex:none;width:auto;padding:5px 8px;font-size:12px";
       del.onclick = () => { if (!confirm(`${i + 1} 番${t.name ? "「" + t.name + "」" : ""}を消す？（後ろの番号は 1 つずつ詰まる）`)) return; const w = numEntries(); w.splice(i, 1); numStore(w); regLast = null; gtListDraw(); };
       d.append(c, no, nm, sel, th, del); box.append(d);
