@@ -959,6 +959,7 @@ say_proc = None
 
 
 PHOTO_DIR = Path.home() / ".local/state/phone-input/photos"  # リモコンから Claude に送った写真
+GESTURES_FILE = Path.home() / ".local/state/phone-input/gestures.json"  # スマホのジェスチャーの写し（kbgesture.py が読む）
 CLIENT_LOG = Path.home() / ".local/state/phone-input/client.log"  # 画面とサーバーの裏で起きたエラーの記録（Claude が読む）
 
 
@@ -1239,6 +1240,11 @@ class Handler(BaseHTTPRequestHandler):
                                              headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=8) as r:
                     r.read()
+            elif path == "/gestures":  # スマホで登録したジェスチャー（お手本・境目・動作）の写し。キーボードのジェスチャー（kbgesture.py）が読む
+                GESTURES_FILE.parent.mkdir(parents=True, exist_ok=True)
+                tmp = GESTURES_FILE.with_suffix(".tmp")
+                tmp.write_text(json.dumps(data.get("entries", []), ensure_ascii=False))
+                tmp.replace(GESTURES_FILE)
             elif path == "/gesture":  # 🎮 操作のパッドのジェスチャー：autotube の /api/…（tabs・video・jump・fullscreen だけ）へ渡す
                 import urllib.request
                 api = str(data.get("api", ""))

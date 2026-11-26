@@ -226,6 +226,7 @@
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える。動く量は ⚙ 設定の「🖱 マウスのパッド」で</td></tr>
 <tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。左下（橙の丸）を押さえて同じ形を 3 回描くと番号と名前を付けて登録、⚙ 設定の「✍ ジェスチャー」で動作を選ぶ（登録があればそちらで見分ける）</td></tr>
+<tr><td>キーボードのジェスチャー</td><td>テレビのキーボードの Esc・F1・F2 のどれかを押さえたまま、タッチパッド（マウス）で描くと、スマホで登録したジェスチャーとして動く（押している間は矢印が止まる）。動かさずに離せば普通の Esc・F1・F2（離したときに出る）</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
 <tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る。帯の両端の「端末」「動画」でテレビをそこへ（F7＋T／F7＋M と同じ）</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
@@ -1209,7 +1210,20 @@
   // 置き場所の名前を変えて、前の登録（gestNum）は捨てる（2026-11-26、直線・角を見る版にしたとき）
   try { localStorage.removeItem("gestNum"); } catch (e) {}
   const numLoad = () => { try { return JSON.parse(localStorage.getItem("gestNum2") || "[]"); } catch (e) { return []; } };
-  const numStore = (v) => { try { localStorage.setItem("gestNum2", JSON.stringify(v)); } catch (e) {} };
+  const numStore = (v) => { try { localStorage.setItem("gestNum2", JSON.stringify(v)); } catch (e) {} gestSync(); };
+  // 登録をテレビにも写す（キーボードの Esc・F1・F2 を押しながらタッチパッドで描くジェスチャーが使う）
+  function gestSync() {
+    clearTimeout(gestSync.t);
+    gestSync.t = setTimeout(() => {
+      const entries = numLoad().filter((e) => e && e.samples && e.samples.length >= REG_N).map((e, i) => {
+        const a = e.act && ACTIONS[e.act];
+        return { no: i + 1, name: e.name || "", samples: e.samples, thr: e.thr, act: e.act || "",
+                 api: a && a[0] !== "local" ? a[0] : "", body: a && a[0] !== "local" ? a[1] : null, label: a ? a[2] : "" };
+      });
+      post("/gestures", { entries }).catch(() => {});
+    }, 800);
+  }
+  setTimeout(gestSync, 3000);
   // 線を 直（まっすぐ）・曲（カーブ）・角（急に曲がる所）に分けて並べる。n は gtNorm の 64 点
   const SEG_K = 3, CORNER_DEG = 45, STRAIGHT_DEG = 30;
   function gtShape(n0) {
