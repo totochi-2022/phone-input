@@ -230,7 +230,7 @@
 <tr><td>キーボードの画面のジェスチャー</td><td>この画面の PC キーボードの Esc・F1・F2 のどれかを押さえたまま（青くなる）、もう 1 本の指でキーボードの上をなぞると、パッドの左上と同じジェスチャー。なぞらずに離せば普通の Esc・F1・F2（離したときに打つ）</td></tr>
 <tr><td>テレビのキーボードのジェスチャー</td><td>テレビのキーボードの Esc・F1・F2 のどれかを押さえたまま、タッチパッド（マウス）で描くと、スマホで登録したジェスチャーとして動く（押している間は矢印が止まる）。動かさずに離せば普通の Esc・F1・F2（離したときに出る）</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
-<tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る。帯の両端の「端末」「動画」でテレビをそこへ（F7＋T／F7＋M と同じ）</td></tr>
+<tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る。端末・動画への切り替えはジェスチャーの動作で（⚙ の「✍ ジェスチャー」の「端末へ」「動画へ」）</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
 <tr><td>F6 ロック</td><td>F6 を押さえたまま Shift＝F6 を押しっぱなし（動画の操作を続けて打てる）。もう一度 F6 か Shift で解除</td></tr>
 <tr><td>F6・F7・F8・かな・Space</td><td>指を置いている間だけ押したまま（離すと単独のキーとして動く）</td></tr>
@@ -286,7 +286,7 @@
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
 <div id="deskView"><iframe id="deskFrame" title="claude-desk" allow="microphone; clipboard-read; clipboard-write; autoplay"></iframe></div>
 <div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write; accelerometer; gyroscope"></iframe></div>
-<div id="bmView"><iframe id="bmFrame" title="ブックマーク" allow="accelerometer; gyroscope"></iframe><div id="bmPad"><div id="bmSwitch"><button class="jmp" data-jump="term">端末</button><span class="sw">‹ <b id="bmSwM">🖱 マウス</b><b id="bmSwK">⌨ キーボード</b> ›</span><button class="jmp" data-jump="video">動画</button></div></div></div>
+<div id="bmView"><iframe id="bmFrame" title="ブックマーク" allow="accelerometer; gyroscope"></iframe><div id="bmPad"><div id="bmSwitch"><span class="sw">‹ <b id="bmSwM">🖱 マウス</b><b id="bmSwK">⌨ キーボード</b> ›</span></div></div></div>
 <div id="testView">
   <button id="voClaude" class="vo">🤖 Claude に頼む</button>
   <button id="clSuggest" class="sug" hidden></button>
@@ -437,7 +437,7 @@
     let sx = null;
     const sw = $("bmSwitch");
     sw.addEventListener("pointerdown", (e) => { if (e.target.closest(".jmp")) return; sx = e.clientX; sw.setPointerCapture(e.pointerId); });
-    // 端末／動画：テレビの画面をそこへ（F7＋T／F7＋M と同じ。ほかの動画は止める）
+    // 端末／動画のボタン（.jmp）は外した（ジェスチャーの動作に。残っていれば動く）
     sw.querySelectorAll(".jmp").forEach((b) => b.addEventListener("click", () => {
       post("/jump", { where: b.dataset.jump }).then(() => { $("status").textContent = `テレビを${b.textContent}にしました`; })
         .catch(() => { $("status").textContent = `${b.textContent}に切り替えられませんでした`; });
