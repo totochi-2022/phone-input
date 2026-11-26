@@ -341,7 +341,7 @@
 <canvas id="gtCanvas" style="display:block;width:100%;height:200px;margin-top:6px;background:#1c1f26;border:1px solid #446;border-radius:10px;touch-action:none"></canvas>
 <div id="gtInfo" style="font-size:13px;color:#aaa;margin:4px 0">0/3 回</div>
 <div id="gtList" style="font-size:14px"></div>
-<div style="font-size:13px;color:#aaa;margin-top:8px">実験：パッドの左下（橙の丸）を押さえて描くと番号を付けて登録、左上で描くと一番近い番号と % を出す（テレビには送らない）。<button id="numClr" style="width:auto;padding:6px 10px;font-size:13px">番号の登録を全部消す</button> <span id="numCnt"></span></div>
+<div style="font-size:13px;color:#aaa;margin-top:8px">実験：パッドの左下（橙の丸）を押さえて同じ形を 3 回（15 秒以内に続けて）描くと番号を付けて登録し、3 回のぶれからその形の境目を決める。左上で描くと一番近い番号と点数・境目を出す（テレビには送らない）。<button id="numClr" style="width:auto;padding:6px 10px;font-size:13px">番号の登録を全部消す</button> <span id="numCnt"></span></div>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">📳 振って画面を移る</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
   <label><input type="checkbox" id="shakeNav"> はたく（手前・奥へ倒す）＝🤖 Claude に頼む、ひねる＝▶ autotube、立てたまま 2 回回す＝🎮 操作</label>
@@ -1213,33 +1213,67 @@
     return out.join("");
   }
   const SHAPE_PEN = 0.08;  // 並びがお手本と違えば ずれ に足す（50% の境目 0.18 の半分くらい）
-  function numRank(pts) {  // 番号ごとの一番合う % を高い順に
+  // 番号の登録：{ samples: [64 点…], thr: 境目のずれ（3 回そろうまで null） }。前の形（64 点だけ）は 1 回分として読む
+  const numEntries = () => numLoad().map((t) => Array.isArray(t) ? { samples: [t], thr: null } : t);
+  function gtDist(vs, myShape, t) {  // vs＝描いた線の変形 25 通り、t＝お手本 1 つ → { d, raw, shape }
+    let best = 9;
+    for (const v of vs) { let d = 0; for (let k = 0; k < GT_N; k++) d += Math.hypot(v[k][0] - t[k][0], v[k][1] - t[k][1]); best = Math.min(best, d / GT_N); }
+    const sh = gtShape(t);
+    return { d: best + (sh === myShape ? 0 : SHAPE_PEN), raw: best, shape: sh };
+  }
+  const REG_N = 3, REG_WIN = 15000, THR_MARGIN = 0.036;  // 3 回描く・前の登録から 15 秒以内なら同じ番号・境目＝3 回の中の一番低い点 − 10 点
+  let regLast = null;  // { no, t }
+  function numRank(pts) {  // 番号ごとに一番合うお手本で、ずれの小さい順
     const n = gtNorm(pts); if (!n) return [];
     const vs = gtVariants(n), myShape = gtShape(n);
     numRank.shape = myShape;
-    return numLoad().map((t, i) => {
-      let best = 9;
-      for (const v of vs) { let d = 0; for (let k = 0; k < GT_N; k++) d += Math.hypot(v[k][0] - t[k][0], v[k][1] - t[k][1]); best = Math.min(best, d / GT_N); }
-      const sh = gtShape(t), pen = sh === myShape ? 0 : SHAPE_PEN;
-      return { no: i + 1, d: best + pen, raw: best, shape: sh, tpl: t };
+    return numEntries().map((e, i) => {
+      let best = null;
+      for (const t of e.samples) { const r = gtDist(vs, myShape, t); if (!best || r.d < best.d) best = { ...r, tpl: t }; }
+      return { no: i + 1, ...best, thr: e.thr, cnt: e.samples.length };
     }).sort((a, b) => a.d - b.d);
+  }
+  function numRegister(n) {  // 左下で描いた形を登録。続けて描けば同じ番号の 2・3 回目、3 回そろえば境目を決める
+    const v = numEntries();
+    let no;
+    if (regLast && Date.now() - regLast.t < REG_WIN && v[regLast.no - 1] && v[regLast.no - 1].samples.length < REG_N) {
+      no = regLast.no; v[no - 1].samples.push(n);
+    } else { v.push({ samples: [n], thr: null }); no = v.length; }
+    const e = v[no - 1], k = e.samples.length;
+    let msg = `${no} 番 ${k}/${REG_N} 回目　${"●".repeat(k)}${"○".repeat(REG_N - k)}\n${gtShape(n) || "（並びなし）"}`;
+    regLast = { no, t: Date.now() };
+    if (k === REG_N) {  // お互いに比べて一番ずれた組から境目を決める
+      let worst = 0;
+      for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) if (i !== j) {
+        const r = gtDist(gtVariants(e.samples[i]), gtShape(e.samples[i]), e.samples[j]); worst = Math.max(worst, r.d);
+      }
+      if (gtPct(worst) < 30) {  // そろっていない：3 回分を捨ててやり直し
+        v.splice(no - 1, 1); numStore(v); regLast = null;
+        return { ok: false, msg: `${no} 番：3 回の形がそろっていない（一番低い組 ${gtPct(worst)} 点）\nもう一度左下で 3 回描く` };
+      }
+      e.thr = worst + THR_MARGIN; regLast = null;
+      msg = `${no} 番 登録できた　●●●\n3 回の一番低い組 ${gtPct(worst)} 点 → 境目 ${gtPct(e.thr)} 点`;
+    }
+    numStore(v);
+    return { ok: true, msg };
   }
   function gestFinish() {
     const g = gest; gest = null; pad.classList.remove("gdraw");
     if (!g || g.len < 40) { gestFlash("短すぎ", false); gcvFade(300); return; }
     if (g.reg) {  // 左下：登録
-      const n = gtNorm(g.pts), v = numLoad(); v.push(n); numStore(v);
-      gcvDraw(g.pts); gcvFade(2500);
-      gestFlash(`${v.length} 番に登録\n${gtShape(n) || "（並びなし）"}`, true, 2500); if (navigator.vibrate) navigator.vibrate([60, 80, 60]);
+      const r = numRegister(gtNorm(g.pts));
+      gcvDraw(g.pts); gcvFade(3000);
+      gestFlash(r.msg, r.ok, 4000); if (navigator.vibrate) navigator.vibrate(r.ok ? [60, 80, 60] : [200, 100, 200]);
       return;
     }
     const rk = numRank(g.pts);
-    if (rk.length) {  // 左上：番号で見分ける（送らない）
-      const top = rk[0], ok = top.d < GT_OK;
+    if (rk.length) {  // 左上：番号で見分ける（送らない）。境目はその番号のもの（3 回そろっていなければ決まりの 50 点）
+      const top = rk[0], thr = top.thr != null ? top.thr : GT_OK, ok = top.d < thr;
+      const close = ok && rk[1] && gtPct(top.d) - gtPct(rk[1].d) < 10;  // 2 番目と 10 点差より近いと「？」
       gcvDraw(g.pts, top.tpl); gcvFade(5000);
-      const line = (r) => `${r.no} 番 ${gtPct(r.d)}%（形だけ ${gtPct(r.raw)}%・${r.shape === numRank.shape ? "並び同じ" : r.shape || "なし"}）`;
-      gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? "" : "？ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}`, ok, 5000);
-      if (navigator.vibrate) navigator.vibrate(ok ? 60 : [40, 60, 40]);
+      const line = (r) => `${r.no} 番 ${gtPct(r.d)} 点（境目 ${gtPct(r.thr != null ? r.thr : GT_OK)}${r.cnt < REG_N ? "・仮" : ""}）${r.shape === numRank.shape ? "" : "・並び " + (r.shape || "なし")}`;
+      gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? (close ? "？ " : "✓ ") : "✗ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}`, ok && !close, 5000);
+      if (navigator.vibrate) navigator.vibrate(ok && !close ? 60 : [40, 60, 40]);
       return;
     }
     const key = g.dirs.join(""), m = gtMatch(g.pts);
