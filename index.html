@@ -1060,7 +1060,7 @@
     if (clicked && typeof pcConsume === "function") pcConsume();  // Ctrl+クリックのあと 1 回だけの Ctrl を離す
   }
   setInterval(flush, 40);
-  const mouseOp = (op, button) => { ops.push({ op, button }); flush(); };
+  const mouseOp = (op, button) => { if (typeof regAbort === "function") regAbort(); ops.push({ op, button }); flush(); };
   const click = (button) => mouseOp("click", button);
 
   // パッド：1 本指＝マウス（なぞる＝移動、タップ＝クリック）。
@@ -1216,8 +1216,20 @@
       return { no: i + 1, ...best, thr: e.thr, cnt: e.samples.length, name: e.name, act: e.act };
     }).sort((a, b) => a.d - b.d);
   }
+  // 3 回そろう前の登録は残さない：途中でクリック・マウス・左上のジェスチャーをしたら、15 秒過ぎたら、読み直したら捨てる
+  function regAbort(quiet) {
+    if (!regLast) return;
+    const v = numEntries(), e = v[regLast.no - 1], no = regLast.no;
+    regLast = null;
+    if (e && e.samples.length < REG_N) {
+      v.splice(no - 1, 1); numStore(v); gtListDraw();
+      if (!quiet) gestFlash(`${no} 番の登録をやめた`, false, 1500);
+    }
+  }
+  { const v = numEntries(), w = v.filter((e) => e.samples.length >= REG_N); if (w.length !== v.length) numStore(w); }
   function numRegister(n) {  // 左下で描いた形を登録。続けて描けば同じ番号の 2・3 回目、3 回そろえば境目を決める
     const v = numEntries();
+    if (regLast && Date.now() - regLast.t >= REG_WIN) regAbort(true);
     let no;
     if (regLast && Date.now() - regLast.t < REG_WIN && v[regLast.no - 1] && v[regLast.no - 1].samples.length < REG_N) {
       no = regLast.no; v[no - 1].samples.push(n);
@@ -1285,11 +1297,12 @@
     const ph = pad.getBoundingClientRect().height;
     if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && (y < CORNER || y > ph - CORNER)) {
       const reg = y > ph - CORNER;  // 左上＝見分ける、左下＝番号を付けて登録する（実験）
+      if (!reg) regAbort();
       anchor = { id: e.pointerId, x, y, t: Date.now(), used: false, reg };
       pad.classList.add(reg ? "gcreg" : "gcorner");
       return;
     }
-    if (!mouse && !gest) mouse = { id: e.pointerId, last: [e.clientX, e.clientY], t: Date.now(), moved: 0 };
+    if (!mouse && !gest) { regAbort(); mouse = { id: e.pointerId, last: [e.clientX, e.clientY], t: Date.now(), moved: 0 }; }
   });
   pad.addEventListener("pointermove", (e) => {
     if (gest && e.pointerId === gest.id) {
