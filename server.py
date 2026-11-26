@@ -1242,6 +1242,25 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/gesture":  # 🎮 操作のパッドのジェスチャー：autotube の /api/…（tabs・video・jump・fullscreen だけ）へ渡す
                 import urllib.request
                 api = str(data.get("api", ""))
+                if api == "keys":  # F キーの機能をそのまま：hold を押さえたまま code を打つ（keyd を通るので F6＋S なども効く）
+                    if not ukbd:
+                        return self._reply(500, "仮想キーボードが使えません（/dev/uinput の権限）".encode())
+                    b = data.get("body") or {}
+                    hold = [int(c) for c in b.get("hold", [])]
+                    code = int(b.get("code", 0))
+                    mods = [int(m) for m in b.get("mods", [])]
+                    if not all(c in UInputKeyboard.CODES for c in [code, *hold, *mods]):
+                        return self._reply(400, b"unknown key")
+                    for c in hold:
+                        ukbd.hold(c, True)
+                    time.sleep(0.04)
+                    try:
+                        ukbd.press(code, mods)
+                        time.sleep(0.04)
+                    finally:
+                        for c in reversed(hold):
+                            ukbd.hold(c, False)
+                    return self._reply(200, b"ok")
                 if api not in ("tabs", "video", "jump", "fullscreen"):
                     return self._reply(400, b"bad api")
                 req = urllib.request.Request("http://127.0.0.1:8766/api/" + api, method="POST",

@@ -1066,22 +1066,46 @@
   // パッド：1 本指＝マウス（なぞる＝移動、タップ＝クリック）。
   // ジェスチャー：左上の角（CORNER px）を 1 本の指で押さえたまま、もう 1 本の指でなぞる → 向きの並びで操作（GESTURES）。
   // 角の指が押さえる前に動いたら（15px）普通のマウスの指として扱う。角を短くタップしたら普通のクリック
-  const ACTIONS = {  // 動作：autotube の /api/…（🎮 操作のボタンと同じ）を phone-input の /gesture 経由で
-    prev: ["tabs", { how: "prev", solo: true }, "◀ 前のタブ"],
-    next: ["tabs", { how: "next", solo: true }, "次のタブ ▶"],
-    close: ["tabs", { how: "close", solo: true }, "✕ タブを閉じる"],
-    full: ["fullscreen", {}, "⛶ 全画面"],
-    term: ["jump", { where: "term", solo: true }, "端末へ"],
-    video: ["jump", { where: "video", solo: true }, "動画へ"],
-    toggle: ["video", { cmd: "toggle" }, "⏯ 再生・一時停止"],
-    back: ["video", { cmd: "back" }, "↺ 10 秒戻る"],
-    fwd: ["video", { cmd: "fwd" }, "↻ 10 秒進む"],
-    back60: ["video", { cmd: "back60" }, "⏪ 1 分戻る"],
-    fwd60: ["video", { cmd: "fwd60" }, "⏩ 1 分進む"],
-    back180: ["video", { cmd: "back180" }, "⏮ 3 分戻る"],
-    fwd180: ["video", { cmd: "fwd180" }, "⏭ 3 分進む"],
-    volup: ["video", { cmd: "volup" }, "🔊 音量を上げる"],
-    voldown: ["video", { cmd: "voldown" }, "🔉 音量を下げる"],
+  // 動作：autotube の /api/…（🎮 操作のボタンと同じ）か、F キーをそのまま打つ（keys：hold を押さえたまま code。keyd を通る）。
+  // 4 つ目は ⚙ の選ぶ欄の分け方。キーの番号は Linux のキーコード
+  const K = { F5: 63, F6: 64, F7: 65, F8: 66, F9: 67, SHIFT: 42, UP: 103, LEFT: 105, RIGHT: 106, DOWN: 108,
+              S: 31, M: 50, C: 46, B: 48, N: 49, T: 20, COMMA: 51, DOT: 52, SLASH: 53, N0: 11 };
+  const key = (code, hold = [], mods = []) => ["keys", { code, hold, mods }];
+  const ACTIONS = {
+    f7: [...key(K.F7), "F7 端末・ブラウザ・動画を回す（ほかの動画を止める）", "タブ・画面"],
+    sf7: [...key(K.F7, [], [K.SHIFT]), "Shift＋F7 回すだけ（音はそのまま）", "タブ・画面"],
+    prev: ["tabs", { how: "prev", solo: true }, "◀ 前のタブ（ほかの動画を止める）", "タブ・画面"],
+    next: ["tabs", { how: "next", solo: true }, "次のタブ ▶（ほかの動画を止める）", "タブ・画面"],
+    prevq: ["tabs", { how: "prev", solo: false }, "◀ 前のタブ（音はそのまま）", "タブ・画面"],
+    nextq: ["tabs", { how: "next", solo: false }, "次のタブ ▶（音はそのまま）", "タブ・画面"],
+    close: ["tabs", { how: "close", solo: true }, "✕ タブを閉じる", "タブ・画面"],
+    newtab: [...key(K.N, [K.F7]), "＋ 新しいタブ（F7＋N）", "タブ・画面"],
+    reload: [...key(K.F5), "↻ 再読み込み（F5）", "タブ・画面"],
+    full: ["fullscreen", {}, "⛶ 全画面（F9）", "タブ・画面"],
+    term: ["jump", { where: "term", solo: true }, "端末へ（F7＋T）", "タブ・画面"],
+    video: ["jump", { where: "video", solo: true }, "動画へ（F7＋M）", "タブ・画面"],
+    browse: [...key(K.B, [K.F7]), "ブラウザへ（F7＋B）", "タブ・画面"],
+    toggle: ["video", { cmd: "toggle" }, "⏯ 再生・一時停止", "動画（F6）"],
+    skip: [...key(K.S, [K.F6]), "⏭ スキップ・次へのボタン（F6＋S）", "動画（F6）"],
+    mute: [...key(K.M, [K.F6]), "🔇 ミュート（F6＋M）", "動画（F6）"],
+    subs: [...key(K.C, [K.F6]), "字幕の出し入れ（F6＋C）", "動画（F6）"],
+    back: ["video", { cmd: "back" }, "↺ 10 秒戻る", "動画（F6）"],
+    fwd: ["video", { cmd: "fwd" }, "↻ 10 秒進む", "動画（F6）"],
+    back60: ["video", { cmd: "back60" }, "⏪ 1 分戻る", "動画（F6）"],
+    fwd60: ["video", { cmd: "fwd60" }, "⏩ 1 分進む", "動画（F6）"],
+    back180: ["video", { cmd: "back180" }, "⏮ 3 分戻る", "動画（F6）"],
+    fwd180: ["video", { cmd: "fwd180" }, "⏭ 3 分進む", "動画（F6）"],
+    top: [...key(K.N0, [K.F6]), "先頭へ（F6＋0）", "動画（F6）"],
+    slower: [...key(K.COMMA, [K.F6]), "遅く（F6＋,）", "動画（F6）"],
+    faster: [...key(K.DOT, [K.F6]), "速く（F6＋.）", "動画（F6）"],
+    rate1: [...key(K.SLASH, [K.F6]), "速さを 1 倍に（F6＋/）", "動画（F6）"],
+    volup: ["video", { cmd: "volup" }, "🔊 音量を上げる", "動画（F6）"],
+    voldown: ["video", { cmd: "voldown" }, "🔉 音量を下げる", "動画（F6）"],
+    winl: [...key(K.LEFT, [K.F8]), "窓を左半分（F8＋←）", "窓（F8）"],
+    winr: [...key(K.RIGHT, [K.F8]), "窓を右半分（F8＋→）", "窓（F8）"],
+    winu: [...key(K.UP, [K.F8]), "窓を上半分（F8＋↑）", "窓（F8）"],
+    wind: [...key(K.DOWN, [K.F8]), "窓を下半分（F8＋↓）", "窓（F8）"],
+    winreset: [...key(K.F8, [], [K.SHIFT]), "窓を元の大きさ（Shift＋F8）", "窓（F8）"],
   };
   const GESTURES = { "←": "prev", "→": "next", "↓→": "close", "↑": "full", "↓": "term", "→←": "video", "↑↓": "toggle" };
   // 覚えた形（$1 Recognizer の回さない版）：64 点に並べ直し、重心を原点・長い辺を 1 にそろえ、点ごとの距離の平均で比べる
@@ -1393,7 +1417,11 @@
       nm.onchange = () => { const w = numEntries(); w[i].name = nm.value.trim(); numStore(w); };
       const sel = document.createElement("select"); sel.style.cssText = "flex:1;min-width:0;font-size:13px;padding:5px";
       sel.add(new Option("（動作なし）", ""));
-      for (const [k, a] of Object.entries(ACTIONS)) sel.add(new Option(a[2], k));
+      const grp = {};
+      for (const [k, a] of Object.entries(ACTIONS)) {
+        if (!grp[a[3]]) { grp[a[3]] = document.createElement("optgroup"); grp[a[3]].label = a[3]; sel.append(grp[a[3]]); }
+        grp[a[3]].append(new Option(a[2], k));
+      }
       sel.value = t.act || "";
       sel.onchange = () => { const w = numEntries(); w[i].act = sel.value; numStore(w); };
       // 境目：－／＋で 5 点ずつ直せる（点 → ずれ に直して保存。0〜95 点）
