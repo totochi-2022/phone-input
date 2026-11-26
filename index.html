@@ -1108,6 +1108,13 @@
     winu: [...key(K.UP, [K.F8]), "窓を上半分（F8＋↑）", "窓（F8）"],
     wind: [...key(K.DOWN, [K.F8]), "窓を下半分（F8＋↓）", "窓（F8）"],
     winreset: [...key(K.F8, [], [K.SHIFT]), "窓を元の大きさ（Shift＋F8）", "窓（F8）"],
+    copy: [...key(46, [], [29]), "コピー（Ctrl＋C）", "編集"],
+    paste: [...key(47, [], [29]), "貼り付け（Ctrl＋V）", "編集"],
+    cut: [...key(45, [], [29]), "切り取り（Ctrl＋X）", "編集"],
+    selall: [...key(30, [], [29]), "すべて選択（Ctrl＋A）", "編集"],
+    tcopy: [...key(46, [], [29, K.SHIFT]), "端末でコピー（Ctrl＋Shift＋C）", "編集"],
+    tpaste: [...key(47, [], [29, K.SHIFT]), "端末で貼り付け（Ctrl＋Shift＋V）", "編集"],
+    undo: [...key(44, [], [29]), "元に戻す（Ctrl＋Z）", "編集"],
   };
   const GESTURES = { "←": "prev", "→": "next", "↓→": "close", "↑": "full", "↓": "term", "→←": "video", "↑↓": "toggle" };
   // 覚えた形（$1 Recognizer の回さない版）：64 点に並べ直し、重心を原点・長い辺を 1 にそろえ、点ごとの距離の平均で比べる
