@@ -282,7 +282,7 @@
 <tr><td>yy</td><td>今の URL をコピー</td></tr>
 <tr><td>i・gi</td><td>i＝Vimium を止める（入力のモード）、gi＝最初の入力欄へ</td></tr>
 <tr><td>Esc</td><td>どのモードも抜ける（キーが効かないときはまず Esc）</td></tr>
-<tr><td>Alt＋Shift＋↑／↓・V</td><td>カラオケ（Brave の拡張機能 Transpose）：キーを半音上げる・下げる、ボーカルを消す・戻す。手前のタブの動画に効く</td></tr>
+<tr><td>カラオケのキー</td><td>ジェスチャーの動作「キーを半音上げる・下げる・元に戻す」（速さはそのまま、±12 まで）。手前の動画（Brave は拡張機能 tv-fullscreen、mpv は rubberband）に効く</td></tr>
 <tr><td>?</td><td>全部のキーの一覧</td></tr>
 <tr><td>外したもの・除外</td><td>v・V（Caret mode で F9 などを取られたので外した）。YouTube では j k l m c , . &lt; &gt; 0〜9 を YouTube に回す。Gmail・端末（ttyd）では Vimium は効かない</td></tr>
 </table>
@@ -1128,9 +1128,9 @@
     undo: [...key(44, [], [29]), "元に戻す（Ctrl＋Z）", "編集"],
     phpaste: ["local", "phpaste", "スマホでコピーしたものを貼り付け（Ctrl＋V）", "編集"],
     phpastet: ["local", "phpastet", "スマホでコピーしたものを端末に貼り付け（Ctrl＋Shift＋V）", "編集"],
-    keyup: [...key(K.UP, [], [56, K.SHIFT]), "キーを半音上げる（Transpose、Alt＋Shift＋↑）", "カラオケ"],
-    keydown: [...key(K.DOWN, [], [56, K.SHIFT]), "キーを半音下げる（Transpose、Alt＋Shift＋↓）", "カラオケ"],
-    vocal: [...key(47, [], [56, K.SHIFT]), "ボーカルを消す・戻す（Transpose、Alt＋Shift＋V）", "カラオケ"],
+    keyup: ["video", { cmd: "keyup" }, "キーを半音上げる（速さはそのまま）", "カラオケ"],
+    keydown: ["video", { cmd: "keydown" }, "キーを半音下げる（速さはそのまま）", "カラオケ"],
+    key0: ["video", { cmd: "key0" }, "キーを元に戻す", "カラオケ"],
     pagereload: ["local", "reload", "このリモコン（スマホ）のページを読み直す", "スマホ"],
   };
   // 自由なキー（⚙ の一覧の「⌨ キーを指定」）："ctrl+shift+t" のような書き方 → { code, mods }
