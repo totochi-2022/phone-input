@@ -1133,6 +1133,28 @@
     vocal: [...key(47, [], [56, K.SHIFT]), "ボーカルを消す・戻す（Transpose、Alt＋Shift＋V）", "カラオケ"],
     pagereload: ["local", "reload", "このリモコン（スマホ）のページを読み直す", "スマホ"],
   };
+  // 自由なキー（⚙ の一覧の「⌨ キーを指定」）："ctrl+shift+t" のような書き方 → { code, mods }
+  const KEYNAMES = { esc: 1, tab: 15, enter: 28, space: 57, bs: 14, del: 111, ins: 110, home: 102, end: 107, pgup: 104, pgdn: 109,
+    up: 103, down: 108, left: 105, right: 106, "-": 12, "^": 13, "@": 26, "[": 27, ";": 39, ":": 40, "]": 43, ",": 51, ".": 52, "/": 53, "\\": 89,
+    ...Object.fromEntries([...Array(10)].map((_, n) => ["f" + (n + 1), 59 + n])), f11: 87, f12: 88,
+    ...Object.fromEntries("1234567890".split("").map((c, n) => [c, 2 + n])),
+    ...Object.fromEntries("qwertyuiop".split("").map((c, n) => [c, 16 + n])),
+    ...Object.fromEntries("asdfghjkl".split("").map((c, n) => [c, 30 + n])),
+    ...Object.fromEntries("zxcvbnm".split("").map((c, n) => [c, 44 + n])) };
+  const MODNAMES = { ctrl: 29, shift: 42, alt: 56, win: 125 };
+  function parseKeys(str) {
+    const parts = String(str || "").toLowerCase().split("+").filter(Boolean);
+    if (!parts.length) return null;
+    const key = parts.pop(), code = KEYNAMES[key];
+    if (!code || !parts.every((m) => MODNAMES[m])) return null;
+    return { code, mods: parts.map((m) => MODNAMES[m]) };
+  }
+  const actOf = (e) => {
+    if (!e || !e.act) return null;
+    if (e.act !== "custom") return ACTIONS[e.act] || null;
+    const k = parseKeys(e.keys);
+    return k ? ["keys", { code: k.code, hold: [], mods: k.mods }, `キー ${e.keys}`, "自由"] : null;
+  };
   const GESTURES = { "←": "prev", "→": "next", "↓→": "close", "↑": "full", "↓": "term", "→←": "video", "↑↓": "toggle" };
   // 覚えた形（$1 Recognizer の回さない版）：64 点に並べ直し、重心を原点・長い辺を 1 にそろえ、点ごとの距離の平均で比べる
   const GT_N = 64, GT_OK = 0.18;
@@ -1242,8 +1264,8 @@
     clearTimeout(gestSync.t);
     gestSync.t = setTimeout(() => {
       const entries = numLoad().filter((e) => e && e.samples && e.samples.length >= REG_N).map((e, i) => {
-        const a = e.act && ACTIONS[e.act];
-        return { no: i + 1, name: e.name || "", samples: e.samples, thr: e.thr, act: e.act || "",
+        const a = actOf(e);
+        return { no: i + 1, name: e.name || "", samples: e.samples, thr: e.thr, act: e.act || "", keys: e.keys || "",
                  api: a && a[0] !== "local" ? a[0] : "", body: a && a[0] !== "local" ? a[1] : null, label: a ? a[2] : "" };
       });
       post("/gestures", { entries, allowEmpty: true }).catch(() => {});
@@ -1257,7 +1279,7 @@
     gestSync.ready = true;
     if (!Array.isArray(v) || !v.length) return false;
     if (!force && numLoad().length) { gestSync(); return false; }
-    try { localStorage.setItem("gestNum2", JSON.stringify(v.map((e) => ({ samples: e.samples, thr: e.thr, name: e.name || "", act: e.act || "" })))); } catch (e) {}
+    try { localStorage.setItem("gestNum2", JSON.stringify(v.map((e) => ({ samples: e.samples, thr: e.thr, name: e.name || "", act: e.act || "", keys: e.keys || "" })))); } catch (e) {}
     gtListDraw();
     return v.length;
   }
@@ -1316,7 +1338,7 @@
     return numEntries().map((e, i) => {
       let best = null;
       for (const t of e.samples) { const r = gtDist(vs, myShape, t); if (!best || r.d < best.d) best = { ...r, tpl: t }; }
-      return { no: i + 1, ...best, thr: e.thr, cnt: e.samples.length, name: e.name, act: e.act };
+      return { no: i + 1, ...best, thr: e.thr, cnt: e.samples.length, name: e.name, act: e.act, keys: e.keys };
     }).sort((a, b) => a.d - b.d);
   }
   // 3 回そろう前の登録は残さない：途中でクリック・マウス・左上のジェスチャーをしたら、15 秒過ぎたら、読み直したら捨てる
@@ -1372,7 +1394,7 @@
       const close = ok && rk[1] && gtPct(top.d) - gtPct(rk[1].d) < 10;  // 2 番目と 10 点差より近いと「？」
       gcvDraw(g.pts, top.tpl); gcvFade(5000);
       const line = (r) => `${r.no} 番${r.name ? "「" + r.name + "」" : ""} ${gtPct(r.d)} 点（境目 ${gtPct(r.thr != null ? r.thr : GT_OK)}${r.cnt < REG_N ? "・仮" : ""}）${r.shape === numRank.shape ? "" : "・並び " + (r.shape || "なし")}`;
-      const go = ok && !close, hit = go && top.act && ACTIONS[top.act];
+      const go = ok && !close, hit = go && actOf(top);
       const what = !go ? "" : hit ? `\n→ ${hit[2]}${gestTest ? "（試すだけ・送らない）" : ""}` : "\n→ 動作なし（⚙ で選ぶ）";
       gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? (close ? "？ " : "✓ ") : "✗ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}${what}`, go, 5000);
       if (navigator.vibrate) navigator.vibrate(go ? 60 : [40, 60, 40]);
@@ -1538,8 +1560,33 @@
         if (!grp[a[3]]) { grp[a[3]] = document.createElement("optgroup"); grp[a[3]].label = a[3]; sel.append(grp[a[3]]); }
         grp[a[3]].append(new Option(a[2], k));
       }
+      const og = document.createElement("optgroup"); og.label = "自由"; og.append(new Option("⌨ キーを指定…", "custom")); sel.append(og);
       sel.value = t.act || "";
-      sel.onchange = () => { const w = numEntries(); w[i].act = sel.value; numStore(w); };
+      // ⌨ キーを指定：修飾キーを押して選び、キーは一覧から（スマホで打たなくてよい）
+      const kb = document.createElement("div"); kb.style.cssText = "flex-basis:100%;display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding-left:54px";
+      const cur = String(t.keys || "").toLowerCase().split("+").filter(Boolean), curKey = cur.length ? cur[cur.length - 1] : "";
+      const mods = {};
+      const saveKeys = () => {
+        const k = [...Object.keys(MODNAMES).filter((m) => mods[m]), ksel.value].join("+");
+        const w = numEntries(); w[i].keys = ksel.value ? k : ""; numStore(w); kshow.textContent = ksel.value ? k : "キーを選ぶ";
+      };
+      for (const m of Object.keys(MODNAMES)) {
+        mods[m] = cur.slice(0, -1).includes(m);
+        const b = document.createElement("button"); b.textContent = { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: "Win" }[m];
+        const paint = () => { b.style.background = mods[m] ? "#2a5bd7" : ""; b.style.color = mods[m] ? "#fff" : ""; };
+        b.style.cssText = "flex:none;width:auto;padding:4px 8px;font-size:12px"; paint();
+        b.onclick = () => { mods[m] = !mods[m]; paint(); saveKeys(); };
+        kb.append(b);
+      }
+      const ksel = document.createElement("select"); ksel.style.cssText = "flex:none;font-size:13px;padding:4px";
+      ksel.add(new Option("（キー）", ""));
+      for (const k of Object.keys(KEYNAMES)) ksel.add(new Option(k.length === 1 ? k.toUpperCase() : k, k));
+      ksel.value = curKey in KEYNAMES ? curKey : "";
+      ksel.onchange = saveKeys;
+      const kshow = document.createElement("span"); kshow.style.cssText = "font-size:12px;color:#8ab4ff"; kshow.textContent = t.keys || "キーを選ぶ";
+      kb.append(ksel, kshow);
+      kb.style.display = sel.value === "custom" ? "flex" : "none";
+      sel.onchange = () => { const w = numEntries(); w[i].act = sel.value; numStore(w); kb.style.display = sel.value === "custom" ? "flex" : "none"; };
       // 境目：－／＋で 5 点ずつ直せる（点 → ずれ に直して保存。0〜95 点）
       const th = document.createElement("span"); th.style.cssText = "flex:none;font-size:11px;color:#888;display:flex;align-items:center;gap:2px";
       if (t.samples.length < REG_N) th.textContent = `仮 ${t.samples.length}/${REG_N}`;
@@ -1551,7 +1598,8 @@
       }
       const del = document.createElement("button"); del.textContent = "消す"; del.style.cssText = "flex:none;width:auto;padding:5px 8px;font-size:12px";
       del.onclick = () => { if (!confirm(`${i + 1} 番${t.name ? "「" + t.name + "」" : ""}を消す？（後ろの番号は 1 つずつ詰まる）`)) return; const w = numEntries(); w.splice(i, 1); numStore(w); regLast = null; gtListDraw(); };
-      d.append(c, no, nm, sel, th, del); box.append(d);
+      d.style.flexWrap = "wrap";
+      d.append(c, no, nm, sel, th, del, kb); box.append(d);
     });
   }
   gtListDraw();
