@@ -1352,7 +1352,7 @@
     if (!w) {
       w = document.createElement("div"); w.id = "gtName";
       w.style.cssText = "position:fixed;left:12px;right:12px;top:30%;z-index:50;background:#1a1f28;border:2px solid #8ab4ff;border-radius:12px;padding:12px;font-size:15px";
-      w.innerHTML = '<div id="gtNameMsg" style="white-space:pre-line;margin-bottom:8px"></div><div class="row" style="gap:6px"><input id="gtNameIn" style="flex:1;font-size:17px;padding:8px;background:#222;color:#eee;border:1px solid #555;border-radius:8px" placeholder="名前（例：G・丸・折り返し右）"><button id="gtNameOk" style="flex:0 0 auto;width:auto;padding:8px 14px">決める</button><button id="gtNameNo" style="flex:0 0 auto;width:auto;padding:8px 10px">あとで</button></div>';
+      w.innerHTML = '<div id="gtNameMsg" style="white-space:pre-line;margin-bottom:8px"></div><div class="row" style="gap:6px"><input id="gtNameIn" style="flex:1;font-size:17px;padding:8px;background:#222;color:#eee;border:1px solid #555;border-radius:8px" placeholder="名前（例：G・丸・折り返し右）"><button id="gtNameOk" style="flex:0 0 auto;width:auto;padding:8px 14px">決める</button><button id="gtNameNo" style="flex:0 0 auto;width:auto;padding:8px 10px">あとで</button></div><button id="gtNameDel" style="width:100%;margin-top:8px;padding:8px;background:#5a2a2a;color:#fff;border:1px solid #a55;border-radius:8px">✕ この登録を消す（うまく描けなかった）</button>';
       document.body.append(w);
     }
     $("gtNameMsg").textContent = msg + "\n名前を付ける（動作は ⚙ の ✍ ジェスチャーで選ぶ）";
@@ -1362,6 +1362,7 @@
       w.style.display = "none"; $("gtNameIn").blur();
     };
     $("gtNameOk").onclick = () => done(true); $("gtNameNo").onclick = () => done(false);
+    $("gtNameDel").onclick = () => { const v = numEntries(); v.splice(no - 1, 1); numStore(v); regLast = null; gtListDraw(); done(false); gestFlash(`${no} 番を消した`, false, 2000); };
     $("gtNameIn").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) done(true); };
   }
   // ⚙ の一覧：絵・番号・名前（直せる）・動作（選べる）・境目・消す
