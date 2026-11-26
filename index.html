@@ -1170,8 +1170,24 @@
       g.strokeStyle = "rgba(120,240,140,.8)"; g.lineWidth = 8; g.beginPath();
       tpl.forEach((q, j) => (j ? g.lineTo(cx + q[0] * sz, cy + q[1] * sz) : g.moveTo(cx + q[0] * sz, cy + q[1] * sz))); g.stroke();
     }
-    g.strokeStyle = "#8ab4ff"; g.lineWidth = 4; g.beginPath();
-    pts.forEach((q, j) => (j ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.stroke();
+    gradStroke(g, pts, 4);
+  }
+  // 書き順が分かる線：始まり＝緑 → 黄 → 終わり＝赤、始まりに丸、終わりに矢じり
+  function gradStroke(g, pts, w) {
+    if (pts.length < 2) return;
+    g.lineCap = g.lineJoin = "round"; g.lineWidth = w;
+    const n = pts.length - 1, col = (f) => `hsl(${130 - 130 * f},90%,60%)`;
+    for (let j = 1; j <= n; j++) {
+      g.strokeStyle = col(j / n); g.beginPath(); g.moveTo(...pts[j - 1]); g.lineTo(...pts[j]); g.stroke();
+    }
+    g.fillStyle = col(0); g.beginPath(); g.arc(...pts[0], w * 1.4, 0, 7); g.fill();
+    // 矢じり：最後の点と、少し手前（全体の長さの 1 割ほど）の点で向きを決める
+    const e = pts[n]; let k = n - 1, len = 0;
+    while (k > 0 && len < w * 4) { len = Math.hypot(e[0] - pts[k][0], e[1] - pts[k][1]); if (len < w * 4) k--; }
+    const ang = Math.atan2(e[1] - pts[k][1], e[0] - pts[k][0]), L = w * 3.2;
+    g.fillStyle = col(1); g.beginPath(); g.moveTo(e[0] + Math.cos(ang) * w, e[1] + Math.sin(ang) * w);
+    g.lineTo(e[0] - Math.cos(ang - 0.5) * L, e[1] - Math.sin(ang - 0.5) * L);
+    g.lineTo(e[0] - Math.cos(ang + 0.5) * L, e[1] - Math.sin(ang + 0.5) * L); g.fill();
   }
   function gcvFade(ms) { const c = gcvGet(); clearTimeout(gcvFade.t); gcvFade.t = setTimeout(() => { c.style.opacity = 0; }, ms); }
   const pad = $("pad"), CORNER = 70, SEG = 28;
@@ -1425,9 +1441,8 @@
     box.innerHTML = v.length ? "" : '<span style="color:#888">登録はまだ無い（パッドの左下を押さえて 3 回描く）</span>';
     v.forEach((t, i) => {
       const d = document.createElement("div"); d.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #2a2a2a";
-      const c = document.createElement("canvas"); c.width = c.height = 40; c.style.cssText = "flex:none;background:#1c1f26;border-radius:6px";
-      const g = c.getContext("2d"); g.strokeStyle = "#8ab4ff"; g.lineWidth = 2; g.beginPath();
-      t.samples[0].forEach((q, j) => (j ? g.lineTo(20 + q[0] * 32, 20 + q[1] * 32) : g.moveTo(20 + q[0] * 32, 20 + q[1] * 32))); g.stroke();
+      const c = document.createElement("canvas"); c.width = c.height = 48; c.style.cssText = "flex:none;background:#1c1f26;border-radius:6px";
+      gradStroke(c.getContext("2d"), t.samples[0].map((q) => [24 + q[0] * 36, 24 + q[1] * 36]), 2.5);
       const no = document.createElement("span"); no.style.cssText = "flex:none;min-width:2.6em"; no.textContent = `${i + 1} 番`;
       const nm = document.createElement("input"); nm.value = t.name || ""; nm.placeholder = "名前";
       nm.style.cssText = "flex:1;min-width:0;font-size:14px;padding:5px;background:#222;color:#eee;border:1px solid #444;border-radius:6px";
