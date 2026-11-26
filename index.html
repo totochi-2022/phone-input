@@ -26,6 +26,8 @@
          user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
          background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px),
                            radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 92px, transparent 94px); }
+  #pad:not(.teach), #pad.gcorner:not(.teach) { background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px); }
+  #pad.gcorner:not(.teach) { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 92px, transparent 94px); }
   #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 92px, transparent 94px),
                            radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 92px, transparent 94px); }
   #pad.gcreg { background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 92px, transparent 94px),
@@ -226,7 +228,7 @@
 <h3>この画面（リモコン）</h3>
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える。動く量は ⚙ 設定の「🖱 マウスのパッド」で</td></tr>
-<tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。左下（橙の丸）を押さえて同じ形を 3 回描くと番号と名前を付けて登録、⚙ 設定の「✍ ジェスチャー」で動作を選ぶ（登録があればそちらで見分ける）</td></tr>
+<tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。⚙ の「ティーチングモード」をオンにすると、左下（橙の丸）を押さえて同じ形を 3 回描くと番号と名前を付けて登録（オフなら左下は普通のパッド）、⚙ 設定の「✍ ジェスチャー」で動作を選ぶ（登録があればそちらで見分ける）</td></tr>
 <tr><td>キーボードの画面のジェスチャー</td><td>この画面の PC キーボードの Esc・F1・F2 のどれかを押さえたまま（青くなる）、もう 1 本の指でキーボードの上をなぞると、パッドの左上と同じジェスチャー。なぞらずに離せば普通の Esc・F1・F2（離したときに打つ）</td></tr>
 <tr><td>テレビのキーボードのジェスチャー</td><td>テレビのキーボードの Esc・F1・F2 のどれかを押さえたまま、タッチパッド（マウス）で描くと、スマホで登録したジェスチャーとして動く（押している間は矢印が止まる）。動かさずに離せば普通の Esc・F1・F2（離したときに出る）</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
@@ -338,6 +340,7 @@
 </div>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">✍ ジェスチャー</h3>
 <div style="font-size:13px;color:#aaa;margin-bottom:6px">🎮 操作のパッドで：左下（橙の丸）を押さえたまま同じ形を 3 回（15 秒以内に続けて）描く＝登録（番号と名前）。左上（青の丸）を押さえたまま描く＝見分けて、下で選んだ動作をテレビへ。境目は 3 回のぶれから決まる</div>
+<label style="font-size:15px;display:block;margin-bottom:6px"><input type="checkbox" id="gestTeach"> ティーチングモード（パッドの左下＝橙の丸を押さえて描くと登録。外すと左下は普通のパッド）</label>
 <label style="font-size:15px;display:block;margin-bottom:6px"><input type="checkbox" id="gestTest"> 試すだけ（テレビに送らず、何と見分けたかをパッドに出す）</label>
 <div id="gtList" style="font-size:14px"></div>
 <div style="margin-top:6px;font-size:12px;color:#888">登録はテレビにも自動で保存（スマホの登録が消えたら開いたときに戻す）
@@ -1205,6 +1208,14 @@
   let gestTest = true;  // ⚙ の「試すだけ」（最初はオン）
   try { gestTest = localStorage.getItem("gestTest") !== "0"; } catch (e) {}
   $("gestTest").checked = gestTest;
+  let gestTeach = false;  // ⚙ の「ティーチングモード」（最初はオフ：左下で登録しない）
+  try { gestTeach = localStorage.getItem("gestTeach") === "1"; } catch (e) {}
+  $("gestTeach").checked = gestTeach; pad.classList.toggle("teach", gestTeach);
+  $("gestTeach").onchange = () => {
+    gestTeach = $("gestTeach").checked; pad.classList.toggle("teach", gestTeach);
+    if (!gestTeach) regAbort(true);
+    try { localStorage.setItem("gestTeach", gestTeach ? "1" : "0"); } catch (e) {}
+  };
   $("gestTest").onchange = () => { gestTest = $("gestTest").checked; try { localStorage.setItem("gestTest", gestTest ? "1" : "0"); } catch (e) {} };
   function gestFlash(text, ok, ms = 1200) {  // パッドの真ん中に一瞬出す
     let el = $("gestMsg");
@@ -1389,7 +1400,7 @@
     }
     const ph = pad.getBoundingClientRect().height;
     CORNER = Math.min(110, ph / 2 - 4);
-    if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && (y < CORNER || y > ph - CORNER)) {
+    if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && (y < CORNER || (gestTeach && y > ph - CORNER))) {
       const reg = y > ph - CORNER;  // 左上＝見分ける、左下＝番号を付けて登録する（実験）
       if (!reg) regAbort();
       anchor = { id: e.pointerId, x, y, t: Date.now(), used: false, reg };
