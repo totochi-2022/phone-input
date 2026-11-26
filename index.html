@@ -193,7 +193,8 @@
   body.k-ja #pJa { display: block; }
   .padwrap { height: 25.2vh; }
   body.k-none .padwrap { height: 34.2vh; }
-  .pckb { margin-top: 10px !important; }
+  .pckb { margin-top: 10px !important; position: relative; touch-action: none; }
+  .pckb .k.ganchor { background: #3a6ab0 !important; }
   /* PC キーボード */
   .pckb { display: grid; gap: 3px; margin: 0 -9px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .pckb .r { display: flex; gap: 3px; margin: 0; }
@@ -226,7 +227,8 @@
 <table>
 <tr><td>パッド</td><td>なぞる＝移動、タップ＝クリック。右の帯＝押している間スクロール。指がパッドの端に来ると震える。動く量は ⚙ 設定の「🖱 マウスのパッド」で</td></tr>
 <tr><td>ジェスチャー</td><td>パッドの左上の角（薄い青の丸）を押さえたまま、もう 1 本の指でなぞる。← 前のタブ・→ 次のタブ・↓→ タブを閉じる・↑ 全画面・↓ 端末へ・→← 動画へ・↑↓ 再生・一時停止。角だけ短く押すと普通のクリック、角から動かすと普通の移動。左下（橙の丸）を押さえて同じ形を 3 回描くと番号と名前を付けて登録、⚙ 設定の「✍ ジェスチャー」で動作を選ぶ（登録があればそちらで見分ける）</td></tr>
-<tr><td>キーボードのジェスチャー</td><td>テレビのキーボードの Esc・F1・F2 のどれかを押さえたまま、タッチパッド（マウス）で描くと、スマホで登録したジェスチャーとして動く（押している間は矢印が止まる）。動かさずに離せば普通の Esc・F1・F2（離したときに出る）</td></tr>
+<tr><td>キーボードの画面のジェスチャー</td><td>この画面の PC キーボードの Esc・F1・F2 のどれかを押さえたまま（青くなる）、もう 1 本の指でキーボードの上をなぞると、パッドの左上と同じジェスチャー。なぞらずに離せば普通の Esc・F1・F2（離したときに打つ）</td></tr>
+<tr><td>テレビのキーボードのジェスチャー</td><td>テレビのキーボードの Esc・F1・F2 のどれかを押さえたまま、タッチパッド（マウス）で描くと、スマホで登録したジェスチャーとして動く（押している間は矢印が止まる）。動かさずに離せば普通の Esc・F1・F2（離したときに出る）</td></tr>
 <tr><td>ドラッグ</td><td>左クリックを押さえたままパッドをなぞる（その間は右クリックが効かない。触れると短く 2 回震える）</td></tr>
 <tr><td>🎮 操作の下</td><td>上に日本語の欄（🎤・送信）、下にマウスと同じパッド。上の端の帯を左へなぞる（か押す）と PC キーボード、右へなぞるとマウスに戻る。帯の両端の「端末」「動画」でテレビをそこへ（F7＋T／F7＋M と同じ）</td></tr>
 <tr><td>Ctrl・Shift・Alt・Win</td><td>1 回タップ＝次の 1 キーだけ（青）、2 回タップ＝押したまま（橙）</td></tr>
@@ -1154,13 +1156,14 @@
   }
   const gtPct = (d) => Math.max(0, Math.round(100 * (1 - d / (GT_OK * 2))));  // ずれ 0 ＝ 100%、採用の境目 ＝ 50%
   // パッドの上の線：なぞっている線（青）と、見分けたらお手本（緑）を重ねる
-  let gcv = null;
+  let gcv = null, gHost = null;  // gHost＝線と結果を出す場所（パッドか、キーボードの画面）
   function gcvGet() {
-    if (!gcv) { gcv = document.createElement("canvas"); gcv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transition:opacity .5s"; $("pad").append(gcv); }
+    if (!gcv) { gcv = document.createElement("canvas"); gcv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transition:opacity .5s;z-index:5"; }
+    const h = gHost || $("pad"); if (gcv.parentNode !== h) h.append(gcv);
     return gcv;
   }
   function gcvDraw(pts, tpl) {
-    const c = gcvGet(), r = $("pad").getBoundingClientRect();
+    const c = gcvGet(), r = (gHost || $("pad")).getBoundingClientRect();
     if (c.width !== Math.round(r.width)) { c.width = r.width; c.height = r.height; }
     const g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); c.style.opacity = 1;
     g.lineCap = g.lineJoin = "round";
@@ -1202,7 +1205,8 @@
   $("gestTest").onchange = () => { gestTest = $("gestTest").checked; try { localStorage.setItem("gestTest", gestTest ? "1" : "0"); } catch (e) {} };
   function gestFlash(text, ok, ms = 1200) {  // パッドの真ん中に一瞬出す
     let el = $("gestMsg");
-    if (!el) { el = document.createElement("div"); el.id = "gestMsg"; pad.append(el); }
+    if (!el) { el = document.createElement("div"); el.id = "gestMsg"; el.style.zIndex = 6; }
+    const h = gHost || pad; if (el.parentNode !== h) h.append(el);
     el.textContent = text; el.className = ok ? "ok" : "ng"; el.style.opacity = 1;
     clearTimeout(gestFlash.t); gestFlash.t = setTimeout(() => { el.style.opacity = 0; setTimeout(() => { if (el.style.opacity === "0") el.textContent = ""; }, 500); }, ms);
   }
@@ -1362,6 +1366,7 @@
     const [x, y] = padLocal(e);
     if (anchor && !gest && e.pointerId !== anchor.id) {  // 角を押さえたまま 2 本目 → ジェスチャー
       anchor.used = true;
+      gHost = pad;
       gest = { id: e.pointerId, seg: [x, y], last: [x, y], dirs: [], len: 0, pts: [[x, y]], reg: anchor.reg };
       pad.classList.add("gdraw");
       return;
@@ -1582,8 +1587,30 @@
       if (b.dataset.shifted) b.textContent = shift ? b.dataset.shifted : b.dataset.label;
     }
   }
+  // キーボードの画面でジェスチャー：Esc・F1・F2 を押さえたまま、もう 1 本の指でキーボードの上をなぞる（キーは打たない）。
+  // なぞらずに離せば普通の Esc・F1・F2（離したときに打つ）。見分け方・動作はパッドの左上と同じ（⚙ の「✍ ジェスチャー」）
+  const KB_GANCHOR = new Set([1, 59, 60]);
+  let kbAnchor = null;  // { id, code, b, used }
+  const kbLocal = (e) => { const r = $("pckb").getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   $("pckb").addEventListener("pointerdown", (e) => {
+    if (kbAnchor && e.pointerId !== kbAnchor.id && !gest) {  // 押さえている間のもう 1 本の指＝描く
+      e.preventDefault();
+      try { $("pckb").setPointerCapture(e.pointerId); } catch (_) {}
+      kbAnchor.used = true; regAbort(true);
+      const [x, y] = kbLocal(e);
+      gHost = $("pckb");
+      gest = { id: e.pointerId, seg: [x, y], last: [x, y], dirs: [], len: 0, pts: [[x, y]], reg: false, kb: true };
+      return;
+    }
     const b = e.target.closest(".k"); if (!b) return;
+    if (KB_GANCHOR.has(Number(b.dataset.code)) && !kbAnchor) {
+      e.preventDefault();
+      try { b.setPointerCapture(e.pointerId); } catch (_) {}
+      kbAnchor = { id: e.pointerId, code: Number(b.dataset.code), b, used: false };
+      b.classList.add("ganchor");
+      if (navigator.vibrate) navigator.vibrate(8);
+      return;
+    }
     e.preventDefault();
     b.classList.add("down"); setTimeout(() => b.classList.remove("down"), 120);
     if (navigator.vibrate) navigator.vibrate(8);
@@ -1626,6 +1653,27 @@
     pcConsume();  // 1 回だけ（青）の Shift なども、ほかのキーと同じくここで離す（F7 を離すまでは押したまま）
   };
   window.addEventListener("pointerup", pcTouchEnd);
+  $("pckb").addEventListener("pointermove", (e) => {
+    if (!gest || !gest.kb || e.pointerId !== gest.id) return;
+    const [x, y] = kbLocal(e);
+    gest.len += Math.hypot(x - gest.last[0], y - gest.last[1]); gest.last = [x, y]; gest.pts.push([x, y]);
+    const dx = x - gest.seg[0], dy = y - gest.seg[1];
+    if (Math.hypot(dx, dy) >= SEG) {
+      const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "→" : "←") : (dy > 0 ? "↓" : "↑");
+      if (gest.dirs[gest.dirs.length - 1] !== d) gest.dirs.push(d);
+      gest.seg = [x, y];
+    }
+    gcvDraw(gest.pts);
+  });
+  const kbGestEnd = (e, ok) => {
+    if (gest && gest.kb && e.pointerId === gest.id) { if (ok) gestFinish(); else { gest = null; gcvFade(0); } return; }
+    if (kbAnchor && e.pointerId === kbAnchor.id) {
+      const a = kbAnchor; kbAnchor = null; a.b.classList.remove("ganchor");
+      if (ok && !a.used) { enqueue(() => post("/kbd", { code: a.code, mods: [] })); pcConsume(); }
+    }
+  };
+  window.addEventListener("pointerup", (e) => kbGestEnd(e, true));
+  window.addEventListener("pointercancel", (e) => kbGestEnd(e, false));
   window.addEventListener("pointercancel", pcTouchEnd);
   function pcF6Unlock() {
     delete pcMod[64];
