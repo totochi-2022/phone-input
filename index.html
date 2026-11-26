@@ -1127,6 +1127,9 @@
     undo: [...key(44, [], [29]), "元に戻す（Ctrl＋Z）", "編集"],
     phpaste: ["local", "phpaste", "スマホでコピーしたものを貼り付け（Ctrl＋V）", "編集"],
     phpastet: ["local", "phpastet", "スマホでコピーしたものを端末に貼り付け（Ctrl＋Shift＋V）", "編集"],
+    keyup: [...key(K.UP, [], [56, K.SHIFT]), "キーを半音上げる（Transpose、Alt＋Shift＋↑）", "カラオケ"],
+    keydown: [...key(K.DOWN, [], [56, K.SHIFT]), "キーを半音下げる（Transpose、Alt＋Shift＋↓）", "カラオケ"],
+    vocal: [...key(47, [], [56, K.SHIFT]), "ボーカルを消す・戻す（Transpose、Alt＋Shift＋V）", "カラオケ"],
     pagereload: ["local", "reload", "このリモコン（スマホ）のページを読み直す", "スマホ"],
   };
   const GESTURES = { "←": "prev", "→": "next", "↓→": "close", "↑": "full", "↓": "term", "→←": "video", "↑↓": "toggle" };
