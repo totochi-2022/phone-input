@@ -24,8 +24,12 @@
   .padwrap { display: flex; gap: 8px; margin-top: 8px; height: 34vh; }
   #pad { flex: 1; background: #1c1f26; border: 1px solid #446; border-radius: 10px; touch-action: none; position: relative;
          user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-         background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 52px, transparent 54px); }
-  #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 52px, transparent 54px); }
+         background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 52px, transparent 54px),
+                           radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 52px, transparent 54px); }
+  #pad.gcorner { background-image: radial-gradient(circle at 0 0, #3a6ab0 0, #3a6ab0 52px, transparent 54px),
+                           radial-gradient(circle at 0 100%, #4a3a22 0, #4a3a22 52px, transparent 54px); }
+  #pad.gcreg { background-image: radial-gradient(circle at 0 0, #2c3550 0, #2c3550 52px, transparent 54px),
+                           radial-gradient(circle at 0 100%, #c08030 0, #c08030 52px, transparent 54px); }
   #pad.gdraw { border-color: #8ab4ff; }
   #gestMsg { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font-size: 17px; pointer-events: none; white-space: pre-line;
              background: rgba(0,0,0,.6); padding: 6px; border-radius: 8px;
@@ -337,6 +341,7 @@
 <canvas id="gtCanvas" style="display:block;width:100%;height:200px;margin-top:6px;background:#1c1f26;border:1px solid #446;border-radius:10px;touch-action:none"></canvas>
 <div id="gtInfo" style="font-size:13px;color:#aaa;margin:4px 0">0/3 回</div>
 <div id="gtList" style="font-size:14px"></div>
+<div style="font-size:13px;color:#aaa;margin-top:8px">実験：パッドの左下（橙の丸）を押さえて描くと番号を付けて登録、左上で描くと一番近い番号と % を出す（テレビには送らない）。<button id="numClr" style="width:auto;padding:6px 10px;font-size:13px">番号の登録を全部消す</button> <span id="numCnt"></span></div>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">📳 振って画面を移る</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
   <label><input type="checkbox" id="shakeNav"> はたく（手前・奥へ倒す）＝🤖 Claude に頼む、ひねる＝▶ autotube、立てたまま 2 回回す＝🎮 操作</label>
@@ -1166,9 +1171,36 @@
     el.textContent = text; el.className = ok ? "ok" : "ng"; el.style.opacity = 1;
     clearTimeout(gestFlash.t); gestFlash.t = setTimeout(() => { el.style.opacity = 0; setTimeout(() => { if (el.style.opacity === "0") el.textContent = ""; }, 500); }, ms);
   }
+  // 実験：左下を押さえて描いた形に番号を付けて覚え（gestNum）、左上で描いたら一番近い番号と % を出す
+  const numLoad = () => { try { return JSON.parse(localStorage.getItem("gestNum") || "[]"); } catch (e) { return []; } };
+  const numStore = (v) => { try { localStorage.setItem("gestNum", JSON.stringify(v)); } catch (e) {} };
+  function numRank(pts) {  // 番号ごとの一番合う % を高い順に
+    const n = gtNorm(pts); if (!n) return [];
+    const vs = gtVariants(n);
+    return numLoad().map((t, i) => {
+      let best = 9;
+      for (const v of vs) { let d = 0; for (let k = 0; k < GT_N; k++) d += Math.hypot(v[k][0] - t[k][0], v[k][1] - t[k][1]); best = Math.min(best, d / GT_N); }
+      return { no: i + 1, d: best, tpl: t };
+    }).sort((a, b) => a.d - b.d);
+  }
   function gestFinish() {
     const g = gest; gest = null; pad.classList.remove("gdraw");
     if (!g || g.len < 40) { gestFlash("短すぎ", false); gcvFade(300); return; }
+    if (g.reg) {  // 左下：登録
+      const n = gtNorm(g.pts), v = numLoad(); v.push(n); numStore(v);
+      gcvDraw(g.pts); gcvFade(2500);
+      gestFlash(`${v.length} 番に登録`, true, 2500); if (navigator.vibrate) navigator.vibrate([60, 80, 60]);
+      return;
+    }
+    const rk = numRank(g.pts);
+    if (rk.length) {  // 左上：番号で見分ける（送らない）
+      const top = rk[0], ok = top.d < GT_OK;
+      gcvDraw(g.pts, top.tpl); gcvFade(4000);
+      const second = rk[1] ? `\n次は ${rk[1].no} 番 ${gtPct(rk[1].d)}%` : "";
+      gestFlash(`${ok ? "" : "？ "}${top.no} 番 ${gtPct(top.d)}%${second}`, ok, 4000);
+      if (navigator.vibrate) navigator.vibrate(ok ? 60 : [40, 60, 40]);
+      return;
+    }
     const key = g.dirs.join(""), m = gtMatch(g.pts);
     let act = null, shown = key;
     if (m && m.d < GT_OK) { act = m.act; shown = `✍ ${gtPct(m.d)}%`; }  // 覚えた形が先
@@ -1191,13 +1223,15 @@
     const [x, y] = padLocal(e);
     if (anchor && !gest && e.pointerId !== anchor.id) {  // 角を押さえたまま 2 本目 → ジェスチャー
       anchor.used = true;
-      gest = { id: e.pointerId, seg: [x, y], last: [x, y], dirs: [], len: 0, pts: [[x, y]] };
+      gest = { id: e.pointerId, seg: [x, y], last: [x, y], dirs: [], len: 0, pts: [[x, y]], reg: anchor.reg };
       pad.classList.add("gdraw");
       return;
     }
-    if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && y < CORNER) {
-      anchor = { id: e.pointerId, x, y, t: Date.now(), used: false };
-      pad.classList.add("gcorner");
+    const ph = pad.getBoundingClientRect().height;
+    if (!anchor && !mouse && e.pointerType === "touch" && x < CORNER && (y < CORNER || y > ph - CORNER)) {
+      const reg = y > ph - CORNER;  // 左上＝見分ける、左下＝番号を付けて登録する（実験）
+      anchor = { id: e.pointerId, x, y, t: Date.now(), used: false, reg };
+      pad.classList.add(reg ? "gcreg" : "gcorner");
       return;
     }
     if (!mouse && !gest) mouse = { id: e.pointerId, last: [e.clientX, e.clientY], t: Date.now(), moved: 0 };
@@ -1219,7 +1253,7 @@
       const [x, y] = padLocal(e);
       if (Math.hypot(x - anchor.x, y - anchor.y) > 15) {  // 角から動かした → 普通のマウスの指
         mouse = { id: anchor.id, last: [e.clientX, e.clientY], t: anchor.t, moved: 99 };
-        anchor = null; pad.classList.remove("gcorner");
+        anchor = null; pad.classList.remove("gcorner", "gcreg");
       }
       return;
     }
@@ -1233,7 +1267,7 @@
     if (gest && e.pointerId === gest.id) { if (ok) gestFinish(); else { gest = null; pad.classList.remove("gdraw"); gcvFade(0); } return; }
     if (anchor && e.pointerId === anchor.id) {
       if (ok && !anchor.used && Date.now() - anchor.t < 300) click("left");
-      anchor = null; pad.classList.remove("gcorner");
+      anchor = null; pad.classList.remove("gcorner", "gcreg");
       return;
     }
     if (mouse && e.pointerId === mouse.id) {
@@ -1304,6 +1338,10 @@
       samples = []; strokes = []; draw(); list();
     };
     list(); setTimeout(draw, 0);
+    const numShow = () => { $("numCnt").textContent = `今 ${numLoad().length} 個`; };
+    $("numClr").onclick = () => { numStore([]); numShow(); };
+    numShow();
+    document.addEventListener("visibilitychange", numShow); setInterval(numShow, 3000);
   }
   // スクロール：帯を押している間ずっと動く。真ん中より上なら上へ、下なら下へ。端に近いほど速い
   const wheel = $("wheel");
