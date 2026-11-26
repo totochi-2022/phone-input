@@ -1125,6 +1125,8 @@
     tcopy: [...key(46, [], [29, K.SHIFT]), "端末でコピー（Ctrl＋Shift＋C）", "編集"],
     tpaste: [...key(47, [], [29, K.SHIFT]), "端末で貼り付け（Ctrl＋Shift＋V）", "編集"],
     undo: [...key(44, [], [29]), "元に戻す（Ctrl＋Z）", "編集"],
+    phpaste: ["local", "phpaste", "スマホでコピーしたものを貼り付け（Ctrl＋V）", "編集"],
+    phpastet: ["local", "phpastet", "スマホでコピーしたものを端末に貼り付け（Ctrl＋Shift＋V）", "編集"],
     pagereload: ["local", "reload", "このリモコン（スマホ）のページを読み直す", "スマホ"],
   };
   const GESTURES = { "←": "prev", "→": "next", "↓→": "close", "↑": "full", "↓": "term", "→←": "video", "↑↓": "toggle" };
@@ -1380,10 +1382,28 @@
     gestFlash(key + " " + hit[2] + (gestTest ? "（試すだけ）" : ""), true, gestTest ? 4000 : 1200); if (navigator.vibrate) navigator.vibrate(60);
     if (!gestTest) gestDo(hit, key);
   }
+  // スマホのクリップボードをテレビのクリップボードへ（/clip → wl-copy）。paste なら続けて Ctrl＋V（term なら Ctrl＋Shift＋V）
+  async function clipToTv(paste, term) {
+    let text = "";
+    try { text = await navigator.clipboard.readText(); }
+    catch (e) { status("スマホのクリップボードを読めない（許可が要る）: " + e.message, true); return; }
+    if (!text) { status("スマホのクリップボードが空", true); return; }
+    try {
+      await post("/clip", { text });
+      if (paste) await post("/gesture", { api: "keys", body: { code: 47, hold: [], mods: term ? [29, 42] : [29] } });
+      status(`${paste ? "貼り付け" : "テレビへ写した"}：${text.slice(0, 30)}${text.length > 30 ? "…" : ""}`);
+    } catch (e) { status("失敗: " + e.message, true); }
+  }
+  // このページの中でコピーしたら、テレビのクリップボードにも写す
+  document.addEventListener("copy", () => {
+    const t = String(getSelection() || "");
+    if (t) post("/clip", { text: t }).catch(() => {});
+  });
   // 動作を行う：local はスマホの中だけ（読み直しなど）、ほかは /gesture でテレビへ
   function gestDo(hit, who) {
     if (hit[0] === "local") {
       if (hit[1] === "reload") setTimeout(() => location.reload(), 600);  // 震え・表示を見せてから
+      if (hit[1] === "phpaste" || hit[1] === "phpastet") clipToTv(true, hit[1] === "phpastet");
       return;
     }
     post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${who}：${hit[2]}`))
@@ -1672,6 +1692,12 @@
       if (!was && pcMod[code]) pcHold(code, true);
       if (was && !pcMod[code]) pcHold(code, false);
       pcRender();
+      return;
+    }
+    if (code === 47 && pcMod[29]) {  // Ctrl＋V：先にスマホでコピーしたものをテレビのクリップボードへ写してから
+      const clip = navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText().catch(() => "") : Promise.resolve("");
+      enqueue(async () => { const t = await clip; if (t) await post("/clip", { text: t }).catch(() => {}); await post("/kbd", { code, mods: [] }); });
+      pcConsume();
       return;
     }
     enqueue(() => post("/kbd", { code, mods: [] }));  // 修飾キーはもう押してあるので、そのキーだけ送る

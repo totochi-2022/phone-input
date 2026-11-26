@@ -1240,6 +1240,15 @@ class Handler(BaseHTTPRequestHandler):
                                              headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=8) as r:
                     r.read()
+            elif path == "/clip":  # スマホでコピーした文字をテレビのクリップボードへ（wl-copy。貼り付けのジェスチャー・画面の中のコピー）
+                text = str(data.get("text", ""))
+                if not text or len(text) > 200000:
+                    return self._reply(400, b"empty or too long")
+                env = {**os.environ, "WAYLAND_DISPLAY": os.environ.get("WAYLAND_DISPLAY", "wayland-0"),
+                       "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")}
+                p = subprocess.Popen(["wl-copy"], stdin=subprocess.PIPE, env=env, start_new_session=True,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                p.communicate(text.encode(), timeout=5)
             elif path == "/gestures":  # スマホで登録したジェスチャー（お手本・境目・動作）の写し。キーボードのジェスチャー（kbgesture.py）も読む
                 if data.get("get"):  # スマホの登録が消えたとき・「テレビの保存から戻す」で読み戻す
                     body = GESTURES_FILE.read_bytes() if GESTURES_FILE.exists() else b"[]"
