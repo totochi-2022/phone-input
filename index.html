@@ -102,6 +102,7 @@
   #testView .opts { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
   #testView .opts label { white-space: nowrap; }
   .modebar [data-mode="test"] { flex: 1.6 1 0; }
+  body.noclaude .modebar [data-mode="test"] { display: none; }  /* ⚙ で「🤖 Claude に頼む」を使わない（claude-desk を使う） */
   .modebar [data-mode="input"] { flex: 0 0 auto; padding: 9px 12px; }
   .vo { padding: 14px 8px; font-size: 19px; border-radius: 12px; }
   .vo.rec { background: #c0392b; color: #fff; }
@@ -240,7 +241,7 @@
 <tr><td>英／あ</td><td>テレビの日本語入力をオフ／オン（PC キーボードの英字がひらがなになるとき）</td></tr>
 <tr><td>🎤</td><td>聞き取った文字を欄に入れるだけ。直してから「送信」</td></tr>
 <tr><td>🤖 Claude に頼む</td><td>1 回目に押す＝聞き始める。話し終わって 2 回目：短く押す＝割り込まずに頼む、長押し（0.5 秒で震えてすぐ終わる）＝割り込んで今すぐ読ませる。読み上げ・端末への切り替えは ⚙</td></tr>
-<tr><td>振る</td><td>はたく（手前・奥へ倒す）＝🤖 Claude に頼むへ、ひねる（縦の軸で手首を返す）＝▶ autotube へ、立てたまま 2 回回す（1.5 秒以内）＝🎮 操作へ。🎮 操作の画面では 回す（1 回）・背中をトンと叩くで マウス⇔キーボード（ひねるは操作の画面でも ▶ autotube へ）（⚙ でオンオフ。移ると震える：Claude＝長く 1 回、操作＝短く 2 回、autotube＝短く 3 回）</td></tr>
+<tr><td>振る</td><td>はたく（手前・奥へ倒す）＝🤖 Claude に頼むへ（⚙ で使わない設定なら 🧰 claude-desk へ）、ひねる（縦の軸で手首を返す）＝▶ autotube へ、立てたまま 2 回回す（1.5 秒以内）＝🎮 操作へ。🎮 操作の画面では 回す（1 回）・背中をトンと叩くで マウス⇔キーボード（ひねるは操作の画面でも ▶ autotube へ）（⚙ でオンオフ。移ると震える：Claude＝長く 1 回、操作＝短く 2 回、autotube＝短く 3 回）</td></tr>
 <tr><td>送信</td><td>短く押す＝文字だけ打つ、長押し（0.5 秒で震えてすぐ送る）＝文字のあとに Enter。欄が空で長押しなら Enter だけ</td></tr>
 </table>
 <h3>窓・タブ（F7・F8・かな）</h3>
@@ -332,6 +333,7 @@
 <h2>設定</h2>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">🤖 Claude に頼む</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
+  <label><input type="checkbox" id="useClaude"> 「🤖 Claude に頼む」を使う（外すと上の段から隠し、はたくは 🧰 claude-desk へ。いつでも戻せる）</label>
   <label><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む</label>
   <div>読む場所：<label><input type="radio" name="voOut" value="phone"> スマホ</label>　<label><input type="radio" name="voOut" value="tv"> テレビ</label></div>
   <label><input type="checkbox" id="voJump"> 頼んだらテレビを端末へ切り替える</label>
@@ -462,6 +464,7 @@
   // モード切り替え：autotube（web.py、既定ポート 8766）の画面を iframe で全体に出す。合言葉は共通
   const AUTOTUBE_PORT = location.protocol === "https:" ? 8776 : 8766;  // HTTPS のページの中に http のページは出せない
   function setMode(mode) {
+    if (mode === "test" && document.body.classList.contains("noclaude")) mode = "desk";  // 使わない設定なら 🧰 claude-desk へ
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
@@ -1237,6 +1240,16 @@
   let gestTest = true;  // ⚙ の「試すだけ」（最初はオン）
   try { gestTest = localStorage.getItem("gestTest") !== "0"; } catch (e) {}
   $("gestTest").checked = gestTest;
+  // ⚙ の「🤖 Claude に頼む を使う」（最初はオン）。外すと上の段のボタンを隠し、Claude に頼むへ移る操作は 🧰 claude-desk へ
+  {
+    let use = true; try { use = localStorage.getItem("useClaude") !== "0"; } catch (e) {}
+    const apply = (on) => {
+      document.body.classList.toggle("noclaude", !on);
+      if (!on && document.body.classList.contains("test")) setMode("desk");
+    };
+    $("useClaude").checked = use; apply(use);
+    $("useClaude").addEventListener("change", (e) => { try { localStorage.setItem("useClaude", e.target.checked ? "1" : "0"); } catch (er) {} apply(e.target.checked); });
+  }
   let gestTeach = false;  // ⚙ の「ティーチングモード」（最初はオフ：左下で登録しない）
   try { gestTeach = localStorage.getItem("gestTeach") === "1"; } catch (e) {}
   $("gestTeach").checked = gestTeach; pad.classList.toggle("teach", gestTeach);
@@ -1268,7 +1281,7 @@
         return { no: i + 1, name: e.name || "", samples: e.samples, thr: e.thr, act: e.act || "", keys: e.keys || "",
                  api: a && a[0] !== "local" ? a[0] : "", body: a && a[0] !== "local" ? a[1] : null, label: a ? a[2] : "" };
       });
-      post("/gestures", { entries, allowEmpty: true }).catch(() => {});
+      post("/gestures", { entries, allowEmpty: true }).catch((e) => clog("gesture", `テレビへ写せない: ${e.message}`));
     }, 800);
   }
   // テレビの保存（~/.local/state/phone-input/gestures.json、1 時間ごとの控えは gestures-bak/）から戻す。
