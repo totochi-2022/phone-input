@@ -145,12 +145,34 @@ def gt_shape(n0):
     return "".join(out)
 
 
-def gt_dist(vs, my_shape, t):
+DIR_MIN, DIR_FREE, DIR_FULL, DIR_PEN = 0.4, 15, 35, 0.08
+
+
+def gt_dir(n):  # 始まり → 終わりの向き（度）。丸など始まりと終わりが近い形は None
+    (ax, ay), (bx, by) = n[0], n[-1]
+    return None if math.hypot(bx - ax, by - ay) < DIR_MIN else math.degrees(math.atan2(by - ay, bx - ax))
+
+
+def dir_pen(d1, d2):
+    if d1 is None or d2 is None:
+        return 0.0
+    x = abs(d1 - d2) % 360
+    x = 360 - x if x > 180 else x
+    return DIR_PEN * min(1.0, max(0.0, (x - DIR_FREE) / (DIR_FULL - DIR_FREE)))
+
+
+def shape_pen(a, b):  # 1 本だけの線の「直」と「曲」は描き方でゆれるので軽く
+    if a == b:
+        return 0.0
+    return SHAPE_PEN / 4 if {a, b} <= {"直", "曲"} else SHAPE_PEN
+
+
+def gt_dist(vs, my_shape, t, my_dir=False):
     best = 9.0
     for v in vs:
         d = sum(math.hypot(v[k][0] - t[k][0], v[k][1] - t[k][1]) for k in range(GT_N)) / GT_N
         best = min(best, d)
-    return best + (0 if gt_shape(t) == my_shape else SHAPE_PEN)
+    return best + shape_pen(gt_shape(t), my_shape) + (0 if my_dir is False else dir_pen(my_dir, gt_dir(t)))
 
 
 def recognize(pts):
@@ -161,8 +183,8 @@ def recognize(pts):
         entries = json.loads(GEST_FILE.read_text())
     except (OSError, ValueError):
         entries = []
-    vs, sh = gt_variants(n), gt_shape(n)
-    rank = sorted(({"e": e, "d": min(gt_dist(vs, sh, t) for t in e["samples"])} for e in entries if e.get("samples")),
+    vs, sh, dr = gt_variants(n), gt_shape(n), gt_dir(n)
+    rank = sorted(({"e": e, "d": min(gt_dist(vs, sh, t, dr) for t in e["samples"])} for e in entries if e.get("samples")),
                   key=lambda r: r["d"])
     return sh, rank
 
@@ -202,7 +224,9 @@ def finish(layer, pts, path_len, used):
     e, d = top["e"], top["d"]
     thr = e.get("thr") if e.get("thr") is not None else GT_OK
     ok = d < thr
-    close = ok and len(rank) > 1 and gt_pct(d) - gt_pct(rank[1]["d"]) < 10
+    e2 = rank[1]["e"] if len(rank) > 1 else None  # 2 番目が自分の境目に届いていない・同じ動作なら迷わない
+    close = (ok and e2 is not None and rank[1]["d"] < (e2.get("thr") if e2.get("thr") is not None else GT_OK)
+             and not (e2.get("api") and e2.get("label") == e.get("label")) and gt_pct(d) - gt_pct(rank[1]["d"]) < 10)
     who = f'{e.get("no")} 番「{e.get("name", "")}」 {gt_pct(d)} 点（境目 {gt_pct(thr)}）'
     if not ok or close:
         log(f"{layer}: {'？' if close else '✗'} {sh} → {who}")

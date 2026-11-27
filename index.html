@@ -1323,21 +1323,34 @@
   const SHAPE_PEN = 0.08;  // 並びがお手本と違えば ずれ に足す（50% の境目 0.18 の半分くらい）
   // 番号の登録：{ samples: [64 点…], thr: 境目のずれ（3 回そろうまで null） }。前の形（64 点だけ）は 1 回分として読む
   const numEntries = () => numLoad().map((t) => Array.isArray(t) ? { samples: [t], thr: null } : t);
-  function gtDist(vs, myShape, t) {  // vs＝描いた線の変形 25 通り、t＝お手本 1 つ → { d, raw, shape }
+  // 始まり → 終わりの向き（度）。始まりと終わりが近い形（丸など）は null。傾きを ±20° 許すので、上と左上のような直線どうしが同じ点数になっていた
+  const DIR_MIN = 0.4, DIR_FREE = 15, DIR_FULL = 35, DIR_PEN = 0.08;
+  function gtDir(n) {
+    const a = n[0], b = n[n.length - 1];
+    return Math.hypot(b[0] - a[0], b[1] - a[1]) < DIR_MIN ? null : Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+  }
+  function dirPen(d1, d2) {  // 向きが 15° までは減点なし、35° で DIR_PEN（約 22 点）
+    if (d1 == null || d2 == null) return 0;
+    let x = Math.abs(d1 - d2) % 360; if (x > 180) x = 360 - x;
+    return DIR_PEN * Math.min(1, Math.max(0, (x - DIR_FREE) / (DIR_FULL - DIR_FREE)));
+  }
+  // 並びの違いの減点。1 本だけの線の「直」と「曲」は描き方でゆれるので軽く（右上の直線が少し曲がって ✗ になっていた）
+  const shapePen = (a, b) => a === b ? 0 : ((a === "直" || a === "曲") && (b === "直" || b === "曲")) ? SHAPE_PEN / 4 : SHAPE_PEN;
+  function gtDist(vs, myShape, t, myDir) {  // vs＝描いた線の変形 25 通り、t＝お手本 1 つ → { d, raw, shape }
     let best = 9;
     for (const v of vs) { let d = 0; for (let k = 0; k < GT_N; k++) d += Math.hypot(v[k][0] - t[k][0], v[k][1] - t[k][1]); best = Math.min(best, d / GT_N); }
     const sh = gtShape(t);
-    return { d: best + (sh === myShape ? 0 : SHAPE_PEN), raw: best, shape: sh };
+    return { d: best + shapePen(sh, myShape) + (myDir === undefined ? 0 : dirPen(myDir, gtDir(t))), raw: best, shape: sh };
   }
   const REG_N = 3, REG_WIN = 15000, THR_MARGIN = 0.036;  // 3 回描く・前の登録から 15 秒以内なら同じ番号・境目＝3 回の中の一番低い点 − 10 点
   let regLast = null;  // { no, t }
   function numRank(pts) {  // 番号ごとに一番合うお手本で、ずれの小さい順
     const n = gtNorm(pts); if (!n) return [];
-    const vs = gtVariants(n), myShape = gtShape(n);
-    numRank.shape = myShape;
+    const vs = gtVariants(n), myShape = gtShape(n), myDir = gtDir(n);
+    numRank.shape = myShape; numRank.dir = myDir;
     return numEntries().map((e, i) => {
       let best = null;
-      for (const t of e.samples) { const r = gtDist(vs, myShape, t); if (!best || r.d < best.d) best = { ...r, tpl: t }; }
+      for (const t of e.samples) { const r = gtDist(vs, myShape, t, myDir); if (!best || r.d < best.d) best = { ...r, tpl: t }; }
       return { no: i + 1, ...best, thr: e.thr, cnt: e.samples.length, name: e.name, act: e.act, keys: e.keys };
     }).sort((a, b) => a.d - b.d);
   }
@@ -1381,7 +1394,7 @@
   }
   function gestFinish() {
     const g = gest; gest = null; pad.classList.remove("gdraw");
-    if (!g || g.len < 40) { gestFlash("短すぎ", false); gcvFade(300); return; }
+    if (!g || g.len < 40) { gestFlash("短すぎ", false); gcvFade(300); clog("gesture", `短すぎ ${g ? Math.round(g.len) : 0}px`); return; }
     if (g.reg) {  // 左下：登録
       const r = numRegister(gtNorm(g.pts));
       gcvDraw(g.pts); gcvFade(3000);
@@ -1391,13 +1404,16 @@
     const rk = numRank(g.pts);
     if (rk.length) {  // 左上：番号で見分ける（送らない）。境目はその番号のもの（3 回そろっていなければ決まりの 50 点）
       const top = rk[0], thr = top.thr != null ? top.thr : GT_OK, ok = top.d < thr;
-      const close = ok && rk[1] && gtPct(top.d) - gtPct(rk[1].d) < 10;  // 2 番目と 10 点差より近いと「？」
+      // 2 番目と 10 点差より近いと「？」。ただし 2 番目が自分の境目に届いていないとき・同じ動作のときは迷わない
+      const r2 = rk[1], sameAct = r2 && actOf(r2) && actOf(top) && actOf(r2)[2] === actOf(top)[2];
+      const close = ok && r2 && r2.d < (r2.thr != null ? r2.thr : GT_OK) && !sameAct && gtPct(top.d) - gtPct(r2.d) < 10;
       gcvDraw(g.pts, top.tpl); gcvFade(5000);
       const line = (r) => `${r.no} 番${r.name ? "「" + r.name + "」" : ""} ${gtPct(r.d)} 点（境目 ${gtPct(r.thr != null ? r.thr : GT_OK)}${r.cnt < REG_N ? "・仮" : ""}）${r.shape === numRank.shape ? "" : "・並び " + (r.shape || "なし")}`;
       const go = ok && !close, hit = go && actOf(top);
       const what = !go ? "" : hit ? `\n→ ${hit[2]}${gestTest ? "（試すだけ・送らない）" : ""}` : "\n→ 動作なし（⚙ で選ぶ）";
       gestFlash(`描いた並び：${numRank.shape || "なし"}\n${ok ? (close ? "？ " : "✓ ") : "✗ "}${line(top)}${rk[1] ? "\n次は " + line(rk[1]) : ""}${what}`, go, 5000);
       if (navigator.vibrate) navigator.vibrate(go ? 60 : [40, 60, 40]);
+      clog("gesture", `${ok ? (close ? "？" : "✓") : "✗"} 並び ${numRank.shape || "なし"}・向き ${numRank.dir == null ? "なし" : Math.round(numRank.dir) + "°"}（お手本 ${top.tpl && gtDir(top.tpl) != null ? Math.round(gtDir(top.tpl)) + "°" : "なし"}${rk[1] && rk[1].tpl && gtDir(rk[1].tpl) != null ? "・次 " + Math.round(gtDir(rk[1].tpl)) + "°" : ""}）｜${line(top)}${rk[1] ? "｜次 " + line(rk[1]) : ""}｜${!go ? "送らない" : hit ? (gestTest ? "試すだけ " : "送る ") + hit[2] : "動作なし"}｜${gHost === pad ? "パッド" : "キーボード"}・${Math.round(g.len)}px`);
       if (hit && !gestTest) gestDo(hit, top.name || top.no + " 番");
       return;
     }
@@ -1438,8 +1454,9 @@
       if (hit[1] === "phpaste" || hit[1] === "phpastet") clipToTv(true, hit[1] === "phpastet");
       return;
     }
-    post("/gesture", { api: hit[0], body: hit[1] }).then(() => status(`ジェスチャー ${who}：${hit[2]}`))
-      .catch((err) => status("失敗: " + err.message, true));
+    const t0 = Date.now();
+    post("/gesture", { api: hit[0], body: hit[1] }).then(() => { status(`ジェスチャー ${who}：${hit[2]}`); clog("gesture", `送れた ${who}：${hit[2]}（${Date.now() - t0}ms）`); })
+      .catch((err) => { status("失敗: " + err.message, true); clog("gesture", `送れない ${who}：${hit[2]}：${err.message}`); });
   }
   pad.addEventListener("pointerdown", (e) => {
     pad.setPointerCapture(e.pointerId);
@@ -1490,7 +1507,7 @@
     acc.x += dx * f; acc.y += dy * f;
   });
   const padUp = (e, ok) => {
-    if (gest && e.pointerId === gest.id) { if (ok) gestFinish(); else { gest = null; pad.classList.remove("gdraw"); gcvFade(0); } return; }
+    if (gest && e.pointerId === gest.id) { if (ok) gestFinish(); else { clog("gesture", `取り消された（pointercancel）パッド・${Math.round(gest.len)}px`); gest = null; pad.classList.remove("gdraw"); gcvFade(0); } return; }
     if (anchor && e.pointerId === anchor.id) {
       if (ok && !anchor.used && Date.now() - anchor.t < 300) click("left");
       anchor = null; pad.classList.remove("gcorner", "gcreg");
@@ -1783,7 +1800,7 @@
     gcvDraw(gest.pts);
   });
   const kbGestEnd = (e, ok) => {
-    if (gest && gest.kb && e.pointerId === gest.id) { if (ok) gestFinish(); else { gest = null; gcvFade(0); } return; }
+    if (gest && gest.kb && e.pointerId === gest.id) { if (ok) gestFinish(); else { clog("gesture", `取り消された（pointercancel）キーボード・${Math.round(gest.len)}px`); gest = null; gcvFade(0); } return; }
     if (kbAnchor && e.pointerId === kbAnchor.id) {
       const a = kbAnchor; kbAnchor = null; a.b.classList.remove("ganchor");
       if (ok && !a.used) { enqueue(() => post("/kbd", { code: a.code, mods: [] })); pcConsume(); }
