@@ -59,6 +59,9 @@
   #atView, #deskView { position: fixed; left: 0; right: 0; bottom: 0; display: none; }
   #deskView iframe { width: 100%; height: 100%; border: 0; background: #111; }
   body.desk #deskView { display: block; }
+  #deskFrame2, body.desktot #deskFrame { display: none; }  /* 🧰 をもう一度押すと totochi の claude-desk に切り替え */
+  body.desktot #deskFrame2 { display: block; }
+  body.desktot .modebar [data-mode="desk"]::after { content: " totochi"; font-size: 0.75em; color: #fc6; }
   .modebar [data-mode="desk"] { flex: 0 0 auto; padding: 9px 8px; }
   #atView iframe { width: 100%; height: 100%; border: 0; background: #111; }
   body.at #inputView { display: none; }
@@ -105,6 +108,7 @@
   body.noclaude .modebar [data-mode="test"] { display: none; }  /* ⚙ で「🤖 Claude に頼む」を使わない（claude-desk を使う） */
   body.noclaude .modebar [data-mode="desk"] { flex: 1.6 1 0; padding: 9px 4px; }  /* 空いたぶん 🧰 を広く */
   body.noclaude .modebar [data-mode="desk"]::after { content: " claude-desk"; font-size: 0.85em; }
+  body.noclaude.desktot .modebar [data-mode="desk"]::after { content: " totochi"; color: #fc6; }
   .modebar [data-mode="input"] { flex: 0 0 auto; padding: 9px 12px; }
   .vo { padding: 14px 8px; font-size: 19px; border-radius: 12px; }
   .vo.rec { background: #c0392b; color: #fff; }
@@ -224,7 +228,7 @@
   <button data-mode="bm" title="テレビの操作：ブックマーク・タブ・動画（autotube の /bookmarks）・文字・マウス・キーボード">🎮 操作</button>
   <button data-mode="at">▶ autotube</button>
   <button data-mode="test" title="Claude：音声で常駐の Claude に頼む・返事を見る・読む">🤖 Claude に頼む</button>
-  <button data-mode="desk" title="claude-desk（Claude の作業台。確認・メニューにも答えられる。試しに並べている）">🧰</button>
+  <button data-mode="desk" title="claude-desk（Claude の作業台）。開いているときにもう一度押すと tonzura ⇔ totochi">🧰</button>
   <button data-mode="input" title="設定・使い方・QR コード">⚙</button>
 </div>
 <div id="help">
@@ -291,7 +295,7 @@
 </table>
 </div>
 <div id="qr"><div id="qrImg"></div><div id="qrUrl"></div><div style="color:#888;font-size:13px">タップで閉じる</div></div>
-<div id="deskView"><iframe id="deskFrame" title="claude-desk" allow="microphone; clipboard-read; clipboard-write; autoplay"></iframe></div>
+<div id="deskView"><iframe id="deskFrame" title="claude-desk" allow="microphone; clipboard-read; clipboard-write; autoplay"></iframe><iframe id="deskFrame2" title="claude-desk（totochi）" allow="microphone; clipboard-read; clipboard-write; autoplay"></iframe></div>
 <div id="atView"><iframe id="atFrame" title="autotube" allow="clipboard-read; clipboard-write; accelerometer; gyroscope"></iframe></div>
 <div id="bmView"><iframe id="bmFrame" title="ブックマーク" allow="accelerometer; gyroscope"></iframe><div id="bmPad"><div id="bmSwitch"><span class="sw">‹ <b id="bmSwM">🖱 マウス</b><b id="bmSwK">⌨ キーボード</b> ›</span></div></div></div>
 <div id="testView">
@@ -475,8 +479,7 @@
     document.body.classList.toggle("desk", mode === "desk");
     if (mode === "desk") {  // claude-desk（別のサーバー）を iframe で。URL と合言葉は phone-input の /desk から
       fitViews();
-      if (!$("deskFrame").src) fetch(`/desk?t=${encodeURIComponent(token)}`).then((r) => r.ok ? r.json() : Promise.reject(r.status))
-        .then((d) => { $("deskFrame").src = d.url; }).catch((e) => { $("deskFrame").srcdoc = `<p style="color:#ccc">claude-desk が開けません（${e}）</p>`; });
+      deskLoad();
     }
     if (mode === "test") { fitViews(); chatSig = ""; setTimeout(chatRefresh, 0); }
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
@@ -492,7 +495,35 @@
     }
     try { localStorage.setItem("mode", mode); } catch (e) {}
   }
-  document.querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
+  // claude-desk：tonzura（この PC）と totochi（家の PC、寝ていれば起こす）。枠は 2 つ持ち、見せる方だけ切り替える
+  let deskTot = false;
+  try { deskTot = localStorage.getItem("deskPc") === "totochi"; } catch (e) {}
+  document.body.classList.toggle("desktot", deskTot);
+  let deskWaitT = 0;
+  function deskLoad() {
+    const f = $(deskTot ? "deskFrame2" : "deskFrame"), pc = deskTot ? "&pc=totochi" : "";
+    if (f.src || (deskTot && deskWaitT)) return;
+    const t0 = Date.now();
+    const go = () => fetch(`/desk?t=${encodeURIComponent(token)}${pc}`).then(async (r) => {
+      if (r.status === 503 && Date.now() - t0 < 180000) {  // totochi が寝ている → 起こしているあいだ待つ
+        f.srcdoc = `<p style="color:#ccc;font:16px sans-serif;padding:1em">💤 totochi を起こしています…（${Math.round((Date.now() - t0) / 1000)} 秒）</p>`;
+        deskWaitT = setTimeout(go, 4000); return;
+      }
+      deskWaitT = 0;
+      if (!r.ok) throw r.status;
+      const d = await r.json(); f.removeAttribute("srcdoc"); f.src = d.url;
+    }).catch((e) => { deskWaitT = 0; f.srcdoc = `<p style="color:#ccc">claude-desk が開けません（${e}）。🧰 を 2 回押すとやり直します</p>`; });
+    go();
+  }
+  document.querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => {
+    if (b.dataset.mode === "desk" && document.body.classList.contains("desk")) {  // 開いているときにもう一度 → PC を切り替え
+      deskTot = !deskTot; document.body.classList.toggle("desktot", deskTot);
+      try { localStorage.setItem("deskPc", deskTot ? "totochi" : "tonzura"); } catch (e) {}
+      const f = $(deskTot ? "deskFrame2" : "deskFrame"); if (f.hasAttribute("srcdoc") && !deskWaitT) { f.removeAttribute("srcdoc"); f.removeAttribute("src"); }
+      deskLoad(); return;
+    }
+    setMode(b.dataset.mode);
+  }; });
   movePad(true);  // 文字の欄・マウス・キーボードはブックマークの画面の下にずっと置く（入力の画面はやめた。⚙ は設定だけ）
   let savedMode = "bm";
   try { savedMode = localStorage.getItem("mode") || "bm"; } catch (e) {}

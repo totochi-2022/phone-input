@@ -19,6 +19,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+_wake_at = 0.0  # /desk?pc=totochi で最後に wake-totochi を呼んだ時刻
 
 PORT = 8765
 # HTTPS の入口（スマホでアプリとして入れるため）。証明書は mkcert で作った自分用の認証局のもの（~/.local/share/tonzura-tls、
@@ -1064,6 +1065,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._reply(404, b"not found")
         if not self._authed():
             return self._reply(403, "トークンが違います".encode())
+        if path == "/desk" and parse_qs(urlparse(self.path).query).get("pc") == ["totochi"]:
+            # 家の PC（totochi）の claude-desk。寝ていれば wake-totochi で起こし、起きるまで 503（スマホがやり直す）
+            try:
+                tok = (Path.home() / ".config/totochi-desk/token").read_text().strip()
+            except OSError:
+                return self._reply(404, "totochi の合言葉がありません".encode())
+            try:
+                socket.create_connection(("192.168.0.202", 8771), timeout=1.5).close()
+            except OSError:
+                global _wake_at
+                if time.time() - _wake_at > 90:
+                    _wake_at = time.time()
+                    subprocess.Popen([str(Path.home() / ".local/bin/wake-totochi")], stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL, start_new_session=True)
+                return self._reply(503, json.dumps({"waking": True}).encode(), "application/json")
+            return self._reply(200, json.dumps({"url": f"https://192.168.0.202:8771/?t={tok}"}).encode(), "application/json")
         if path == "/desk":  # claude-desk（Claude の作業台、別のサーバー）の URL。合言葉は claude-desk の設定から
             try:
                 st = json.loads((Path.home() / ".config/claude-desk/settings.json").read_text())
