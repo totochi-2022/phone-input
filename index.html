@@ -103,6 +103,8 @@
   #testView .opts label { white-space: nowrap; }
   .modebar [data-mode="test"] { flex: 1.6 1 0; }
   body.noclaude .modebar [data-mode="test"] { display: none; }  /* ⚙ で「🤖 Claude に頼む」を使わない（claude-desk を使う） */
+  body.noclaude .modebar [data-mode="desk"] { flex: 1.6 1 0; padding: 9px 4px; }  /* 空いたぶん 🧰 を広く */
+  body.noclaude .modebar [data-mode="desk"]::after { content: " claude-desk"; font-size: 0.85em; }
   .modebar [data-mode="input"] { flex: 0 0 auto; padding: 9px 12px; }
   .vo { padding: 14px 8px; font-size: 19px; border-radius: 12px; }
   .vo.rec { background: #c0392b; color: #fff; }
@@ -333,7 +335,7 @@
 <h2>設定</h2>
 <h3 style="font-size:15px;color:#8ab4ff;margin:14px 0 6px">🤖 Claude に頼む</h3>
 <div class="opts" style="display:flex;flex-direction:column;gap:10px;font-size:15px">
-  <label><input type="checkbox" id="useClaude"> 「🤖 Claude に頼む」を使う（外すと上の段から隠し、はたくは 🧰 claude-desk へ。いつでも戻せる）</label>
+  <label><input type="checkbox" id="useClaude"> 「🤖 Claude に頼む」を使う（外すと上の段から隠して 🧰 claude-desk を広く、はたくも 🧰 へ。ここで戻せる。claude-desk が使えないときは URL に ?mode=test を付けて開くとこの画面が出る）</label>
   <label><input type="checkbox" id="voSpeak"> 返事をずんだもんが読む</label>
   <div>読む場所：<label><input type="radio" name="voOut" value="phone"> スマホ</label>　<label><input type="radio" name="voOut" value="tv"> テレビ</label></div>
   <label><input type="checkbox" id="voJump"> 頼んだらテレビを端末へ切り替える</label>
@@ -464,7 +466,8 @@
   // モード切り替え：autotube（web.py、既定ポート 8766）の画面を iframe で全体に出す。合言葉は共通
   const AUTOTUBE_PORT = location.protocol === "https:" ? 8776 : 8766;  // HTTPS のページの中に http のページは出せない
   function setMode(mode) {
-    if (mode === "test" && document.body.classList.contains("noclaude")) mode = "desk";  // 使わない設定なら 🧰 claude-desk へ
+    // 使わない設定なら 🧰 claude-desk へ。ただし URL の ?mode=test で開いたときはそのまま（claude-desk が使えないときの逃げ道）
+    if (mode === "test" && document.body.classList.contains("noclaude") && new URLSearchParams(location.search).get("mode") !== "test") mode = "desk";
     document.body.classList.toggle("at", mode === "at");
     document.body.classList.toggle("bm", mode === "bm");
     document.body.classList.toggle("test", mode === "test");
@@ -1245,7 +1248,7 @@
     let use = true; try { use = localStorage.getItem("useClaude") !== "0"; } catch (e) {}
     const apply = (on) => {
       document.body.classList.toggle("noclaude", !on);
-      if (!on && document.body.classList.contains("test")) setMode("desk");
+      if (!on && document.body.classList.contains("test") && new URLSearchParams(location.search).get("mode") !== "test") setMode("desk");
     };
     $("useClaude").checked = use; apply(use);
     $("useClaude").addEventListener("change", (e) => { try { localStorage.setItem("useClaude", e.target.checked ? "1" : "0"); } catch (er) {} apply(e.target.checked); });
